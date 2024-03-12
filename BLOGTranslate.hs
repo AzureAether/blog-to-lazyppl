@@ -48,7 +48,7 @@ origins ((DECSTMT (OFUDECL (SIMPLETYPE t,s') (SIMPLETYPE t'))):p) s = if s == t'
 origins (stmt:p) s = origins p s
 origins [] s = []
 
--- list of all origin functions (and their types) of a type (could be fused with origins?)
+-- list of all origin *functions* (and their types) of a type (could be fused with origins?)
 ofus :: Program -> String -> [(Type,String)]
 ofus ((DECSTMT (OFUDECL (SIMPLETYPE t,s') (SIMPLETYPE t'))):p) s = if s == t' 
                                                                       then (SIMPLETYPE t,s'):ofus p s 
@@ -99,7 +99,6 @@ modelBody :: Program -> [String]
 modelBody p = modelBody' p p 
 
 -- keeps a copy of the whole program for reference (first arg)
--- DECSTMT (RFUDECL (SIMPLETYPE "Real") "c" [] (CALL "UnivarGaussian" [INT 0,INT 10]))
 modelBody' :: Program -> Program -> [String]
 modelBody' p (QRYSTMT e : p')                    = modelBody' p p'
 modelBody' p (EVDSTMT (e1,e2) : p')              = modelBody' p p'
@@ -119,26 +118,83 @@ userTypeInits p = if ts == []
     where ts = types p
 
 -- writes the (Haskell) type initialisation of a user-defined BLOG type
--- countType, distinctMembers, transExpr, context
--- MISSING DISTINCT STATEMENTS, SKY FIX IT!!! NEXT THING TO DO, RIGHT HERE!!!
 userTypeInit :: Program -> String -> [String]
-userTypeInit p s = ["---- "++s++" population",
-                    "let offset = 0",
-                    "let universe"++s++" = []"] ++
-                    concat (Prelude.map (dntStmtTrans p s) dntStmts) ++
-                    concat (Prelude.map (numStmtTrans p) numStmts)
-  where numStmts = numberStmts p s
-        dntStmts = distinctStmts p s
+userTypeInit p t = ("---- "++t++" population") :
+                   concat (Prelude.map (dntStmtTrans p t) dntStmts) ++
+                   concat (Prelude.map (numStmtTrans p) numStmts) ++
+                   universeDecl p t
+  where dntStmts = distinctStmts p t
+        numStmts = numberStmts p t
+
+-- helper function of userTypeInit
+distinctStmts :: Program -> String -> [(String,Int)]
+distinctStmts (DECSTMT (DNTDECL s' [(member,count)]):p) s = if s' == s 
+                                                            then (member,count) : distinctStmts p s
+                                                            else distinctStmts p s
+distinctStmts (DECSTMT (DNTDECL s' ((member,count):ms)):p) s = if s' == s 
+                                                               then (member,count) : distinctStmts (DECSTMT (DNTDECL s' ms):p) s
+                                                               else distinctStmts (DECSTMT (DNTDECL s' ms):p) s
+distinctStmts (stmt:p) s = distinctStmts p s
+distinctStmts []       s = []
+
+dntStmtTrans :: Program -> String -> (String,Int) -> [String]
+dntStmtTrans p t (obj,count) = ["-- distinct "++t++" "++obj++if count == -1 then "" else "["++(show count)++"]",
+                                "v"++obj++" = "++if count == -1 
+                                                 then obj++nothings++" "++(show identity)
+                                                 else "["++obj++nothings++" ("++(show identity)++s++(show $ count-1)++"]]"]
+  where nothings = (concat [" Nothing" | ofu <- ofus p t])
+        identity = offset p t obj
+        s = " + i) | i <- [0.."
+
+-- helper function of dntStmtTrans
+-- determines the identity of a distinct member of a user-defined type
+offset :: Program -> String -> String -> Int
+offset [] t obj = 0
+offset (DECSTMT (DNTDECL t' [(obj',n)]):p) t obj = if t == t'
+                                                   then if obj' == obj 
+                                                        then 0
+                                                        else abs n + offset p t obj
+                                                   else offset p t obj
+offset (DECSTMT (DNTDECL t' ((obj',n):objs)):p) t obj = if t == t'
+                                                        then if obj' == obj 
+                                                             then 0
+                                                             else abs n + offset (DECSTMT (DNTDECL t' objs):p) t obj
+                                                        else offset p t obj
+offset (stmt:p) t obj = offset p t obj
+
+-- find the distinct members of a type
+members :: Program -> String -> [(String,Int)]
+members [] t = []
+members (DECSTMT (DNTDECL t' objs):p) t  = if t == t'
+                                           then objs ++ members p t
+                                           else members p t
+members (stmt:p) t = members p t
+
+-- trick abusing the fact that no member has identifier ""
+countDistincts :: Program -> String -> Int
+countDistincts p t = offset p t ""
 
 -- translate a number statement, EG "#Blip(Source=a) ~ Poisson(1.0)"
 numStmtTrans :: Program -> Statement -> [String]
 numStmtTrans p (DECSTMT (NUMDECL s' os e)) = ["-- "++s'++(describeOrigins os)++" ~ "++(show e),
                                               numStmtCalc p stmt,
-                                              numStmtGround p stmt,
-                                              "let offset = offset + "++maybeSum++"len"++numStmtName stmt,
-                                              "let universe"++s'++" = universe"++s'++" ++ lst"++numStmtName stmt]
+                                              numStmtGround p stmt]
   where stmt = (DECSTMT (NUMDECL s' os e))
         maybeSum = if os == [] then "" else "sum "
+
+-- template syntax: should be filled in
+universeDecl :: Program -> String -> [String]
+universeDecl p t = ["-- universe of all "++t++" members",
+                    "let universe"++t++" = "++(unwords $ memberStrings p t)]
+
+memberStrings :: Program -> String -> [String]
+memberStrings [] t = []
+memberStrings (DECSTMT (NUMDECL t'   os e):p) t = if t' == t then "numstmt" : memberStrings p t else memberStrings p t
+memberStrings (DECSTMT (DNTDECL t'  [obj]):p) t = if t' == t then "decstmt" : memberStrings p t else memberStrings p t
+memberStrings (DECSTMT (DNTDECL t' (m:ms)):p) t = if t' == t 
+                                                  then "decstmt" : memberStrings (DECSTMT (DNTDECL t' ms):p) t
+                                                  else memberStrings p t
+memberStrings (stmt:p) t = memberStrings p t
 
 describeOrigins :: [(String,String)] -> String
 describeOrigins [] = ""
@@ -156,7 +212,7 @@ numStmtCalc p (DECSTMT (NUMDECL s' [] e)) = "len"++numStmtName (DECSTMT (NUMDECL
 numStmtCalc p (DECSTMT (NUMDECL s' os e)) = "len"++numStmtName (DECSTMT (NUMDECL s' os e))++" <- sequence [do {n <- "++rhs++";return (n"++vars++")} | "++originLoop++"]"
   where rhs = (transExpr p (context p) e)
         originLoop = intercalate ", " $ Prelude.map (\(ofu,arg) -> arg ++ " <- universe" ++ (typeOrigin p ofu)) os
-        vars = concat ["," ++ (originVar os (fst o)) | o <- os] --use pattern matching
+        vars = concat ["," ++ (originVar os (fst o)) | o <- os]
 
 numStmtGround :: Program -> Statement -> String
 numStmtGround p (DECSTMT (NUMDECL s' [] e)) = "let lst"++name++" = ["++s'++sources++lastBit++name++"]]"
@@ -182,28 +238,6 @@ contains ((ofu,arg):os) s = (ofu == s) || contains os s
 originVar :: [(String,String)] -> String -> String
 originVar [] s             = "ORIGINVAR BUG"
 originVar ((ofu,arg):os) s = if (ofu == s) then arg else originVar os s
-
--- helper function of userTypeInit
-distinctStmts :: Program -> String -> [(String,Int)]
-distinctStmts (DECSTMT (DNTDECL s' [(member,count)]):p) s = if s' == s 
-                                                            then (member,count) : distinctStmts p s
-                                                            else distinctStmts p s
-distinctStmts (DECSTMT (DNTDECL s' ((member,count):ms)):p) s = if s' == s 
-                                                               then (member,count) : distinctStmts (DECSTMT (DNTDECL s' ms):p) s
-                                                               else distinctStmts (DECSTMT (DNTDECL s' ms):p) s
-distinctStmts (stmt:p) s = distinctStmts p s
-distinctStmts []       s = []
-
-dntStmtTrans :: Program -> String -> (String,Int) -> [String]
-dntStmtTrans p t (member,count) = ["-- distinct "++t++" "++member++if count == -1 then "" else "["++(show count)++"]",
-                                   if count == -1
-                                   then "let v"++member++" = "++t++nothings++" offset"
-                                   else "let v"++member++" = ["++t++nothings++" (offset + i) | i <- [0.."++(show $ count - 1)++"]]",
-                                   "let offset = offset + "++(show $ abs count),
-                                   if count == -1
-                                   then "let universe"++t++" = v"++member++" : universe"++t
-                                   else "let universe"++t++" = universe"++t++" ++ v"++member]
-  where nothings = (concat [" Nothing" | ofu <- ofus p t])
 
 -- translates a BLOG expression into a Haskell one
 -- source program -> program's type context -> expression to translate -> output
@@ -245,7 +279,7 @@ transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
                                Just ([],SIMPLETYPE t') ->  s ++ " !! " ++  "???" ++ " + " ++ (transExpr p c e)
-                               Just ((arg:args),t) -> s ++ " (" ++ transExpr p c e ++ ")"
+                               Just ((arg:args),t) -> "f"++ s ++ " (" ++ transExpr p c e ++ ")"
                                _ -> error $ "cannot call (" ++ (show s) ++ ") as a function"
 
 -- retrieves the number statements of a user-defined type
