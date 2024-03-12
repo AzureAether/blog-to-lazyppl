@@ -182,23 +182,29 @@ numStmtTrans p (DECSTMT (NUMDECL s' os e)) = ["-- "++s'++(describeOrigins os)++"
   where stmt = (DECSTMT (NUMDECL s' os e))
         maybeSum = if os == [] then "" else "sum "
 
--- template syntax: should be filled in
-universeDecl :: Program -> String -> [String]
-universeDecl p t = ["-- universe of all "++t++" members",
-                    "let universe"++t++" = "++(unwords $ memberStrings p t)]
-
-memberStrings :: Program -> String -> [String]
-memberStrings [] t = []
-memberStrings (DECSTMT (NUMDECL t'   os e):p) t = if t' == t then "numstmt" : memberStrings p t else memberStrings p t
-memberStrings (DECSTMT (DNTDECL t'  [obj]):p) t = if t' == t then "decstmt" : memberStrings p t else memberStrings p t
-memberStrings (DECSTMT (DNTDECL t' (m:ms)):p) t = if t' == t 
-                                                  then "decstmt" : memberStrings (DECSTMT (DNTDECL t' ms):p) t
-                                                  else memberStrings p t
-memberStrings (stmt:p) t = memberStrings p t
-
 describeOrigins :: [(String,String)] -> String
 describeOrigins [] = ""
 describeOrigins xs = "("++(intercalate "," $ Prelude.map (\x->fst x ++"="++snd x) xs)++")"
+
+-- declare a list containing all members of a user-defined type
+universeDecl :: Program -> String -> [String]
+universeDecl p t = ["-- universe of all "++t++" members",
+                    "let universe"++t++" = "++(intercalate " ++ " $ memberStrings p t)]
+
+memberStrings :: Program -> String -> [String]
+memberStrings [] t = []
+memberStrings (DECSTMT (NUMDECL t'   os e):p) t = if t' == t then ("lst"++name) : memberStrings p t else memberStrings p t
+  where name = numStmtName $ DECSTMT (NUMDECL t' os e)
+memberStrings (DECSTMT (DNTDECL t' [m]):p) t = if t' == t then (memberString m) : memberStrings p t else memberStrings p t
+memberStrings (DECSTMT (DNTDECL t' (m:ms)):p) t = if t' == t 
+                                                  then (memberString m) : memberStrings (DECSTMT (DNTDECL t' ms):p) t
+                                                  else memberStrings p t
+memberStrings (stmt:p) t = memberStrings p t
+
+-- helper function of memberStrings
+memberString :: (String,Int) -> String
+memberString (s,-1) = "[v"++s++"]"
+memberString (s,_)  = "v"++s
 
 -- gives a unique identifier to a number statement
 -- (NB: output is a valid Haskell variable identifier.)
@@ -218,7 +224,7 @@ numStmtGround :: Program -> Statement -> String
 numStmtGround p (DECSTMT (NUMDECL s' [] e)) = "let lst"++name++" = ["++s'++sources++lastBit++name++"]]"
   where name    = numStmtName (DECSTMT (NUMDECL s' [] e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' [] e))
-        lastBit = " (n + offset) | n <- [1..fromIntegral len"
+        lastBit = " n | n <- [1..fromIntegral len"
 numStmtGround p (DECSTMT (NUMDECL s' os e)) = "let lst"++name++" = concat [["++s'++sources++" i | i <- [1..n]] | (n"++vars++") <- len"++name++"]"
   where name    = numStmtName (DECSTMT (NUMDECL s' os e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' os e))
