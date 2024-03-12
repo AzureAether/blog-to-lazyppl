@@ -139,9 +139,9 @@ distinctStmts []       s = []
 
 dntStmtTrans :: Program -> String -> (String,Int) -> [String]
 dntStmtTrans p t (obj,count) = ["-- distinct "++t++" "++obj++if count == -1 then "" else "["++(show count)++"]",
-                                "v"++obj++" = "++if count == -1 
-                                                 then obj++nothings++" "++(show identity)
-                                                 else "["++obj++nothings++" ("++(show identity)++s++(show $ count-1)++"]]"]
+                                "let v"++obj++" = "++if count == -1 
+                                                 then t++nothings++" "++(show identity)
+                                                 else "["++t++nothings++" ("++(show identity)++s++(show $ count-1)++"]]"]
   where nothings = (concat [" Nothing" | ofu <- ofus p t])
         identity = offset p t obj
         s = " + i) | i <- [0.."
