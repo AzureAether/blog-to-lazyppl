@@ -26,7 +26,7 @@ header = const ["-- This file was produced by LazyBLOG translator",
 userTypes :: Program -> [String]
 userTypes p = if (types p == [])
               then ["-- user-defined type declarations would go here",
-                    "-- (none user-defined types in source file)"] 
+                    "-- (none found in source file)"] 
               else "-- user-defined type declarations" : Prelude.map (declare p) (types p)
 
 -- Haskell declaration of a type
