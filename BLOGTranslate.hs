@@ -277,20 +277,20 @@ numStmtName :: Statement -> String
 numStmtName (DECSTMT (NUMDECL s' origins e)) = s' ++ concat (Prelude.map fst origins)
 
 -- writes a line of Haskell to calculate the RHS of a number statement
--- assumes identifier "n" is not already bound
+-- assumes identifier "i" is not already bound
 numStmtCalc :: Program -> Statement -> String
 numStmtCalc p (DECSTMT (NUMDECL s' [] e)) = "len"++numStmtName (DECSTMT (NUMDECL s' [] e))++" <- "++(transExpr p (context p) e)
-numStmtCalc p (DECSTMT (NUMDECL s' os e)) = "len"++numStmtName (DECSTMT (NUMDECL s' os e))++" <- sequence [do {n <- "++rhs++";return (n"++vars++")} | "++originLoop++"]"
+numStmtCalc p (DECSTMT (NUMDECL s' os e)) = "len"++numStmtName (DECSTMT (NUMDECL s' os e))++" <- sequence [do {i <- "++rhs++";return (i"++vars++")} | "++originLoop++"]"
   where rhs = (transExpr p (context p) e)
         originLoop = intercalate ", " $ Prelude.map (\(ofu,arg) -> arg ++ " <- universe" ++ (typeOrigin p ofu)) os
         vars = concat ["," ++ (originVar os (fst o)) | o <- os]
 
 numStmtGround :: Program -> Statement -> String
-numStmtGround p (DECSTMT (NUMDECL s' [] e)) = "let lst"++name++" = ["++s'++sources++lastBit++name++"]]"
+numStmtGround p (DECSTMT (NUMDECL s' [] e)) = "let lst"++name++" = ["++s'++sources++lastBit++name++" - 1]]"
   where name    = numStmtName (DECSTMT (NUMDECL s' [] e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' [] e))
-        lastBit = " n | n <- [1..fromIntegral len"
-numStmtGround p (DECSTMT (NUMDECL s' os e)) = "let lst"++name++" = concat [["++s'++sources++" i | i <- [1..n]] | (n"++vars++") <- len"++name++"]"
+        lastBit = " ("++(show $ offset p s' "")++" + i) | i <- [0..fromIntegral len"
+numStmtGround p (DECSTMT (NUMDECL s' os e)) = "let lst"++name++" = concat [["++s'++sources++" i | i <- [0..n-1]] | (n"++vars++") <- len"++name++"]"
   where name    = numStmtName (DECSTMT (NUMDECL s' os e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' os e))
         vars    = concat ["," ++ (originVar os ofu) | (ofu,arg) <- os]
