@@ -488,12 +488,6 @@ footer p = ["-- EOF"]
 main :: IO ()
 main = do
     fileName <- getLine
-    string <- readFile fileName
+    string <- readFile ("example/"++fileName++".blog")
     putStrLn $ (translator.parser.lexer) string
-
--- debug method
-debug :: IO ()
-debug = do
-    string <- readFile "example/aircraft-static.blog"
-    putStrLn $ show $ ofus ((parser.lexer) string) "Blip"
     
