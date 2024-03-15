@@ -99,13 +99,78 @@ modelBody :: Program -> [String]
 modelBody p = modelBody' p p 
 
 -- keeps a copy of the whole program for reference (first arg)
+-- translation is ad-hoc (pattern matching non-exhaustive)
 modelBody' :: Program -> Program -> [String]
-modelBody' p (QRYSTMT e : p')                    = modelBody' p p'
-modelBody' p (EVDSTMT (e1,e2) : p')              = modelBody' p p'
+-- the query is handled by returnStmt
+modelBody' p (QRYSTMT e : p')                  = modelBody' p p'
+
+-- evidence statements not yet implemented (should score 1 iff evidence holds)
+modelBody' p (EVDSTMT (e1,e2) : p')            = modelBody' p p'
+
+-- nullary random functions (where RHS is built-in distribution)
+modelBody' p (DECSTMT (RFUDECL (SIMPLETYPE "Real") s [] (CALL "UnivarGaussian" [arg1,arg2])) : p') = (s++" <- normal ("++(transExpr p (context p) arg1)++") ("++(transExpr p (context p) arg2)++")"):modelBody' p p'
+
+-- nullary random functions (where RHS is general)
+modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
+                                               then error "can only translate built-in distributions"
+                                               else ("let "++s++" = "++(transExpr p (context p) e)) : modelBody' p p'
+
+-- random functions on arguments
 modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let "++s++(unwords (Prelude.map snd args)) ++ " = " ++ (transExpr p (context p) e)) : modelBody' p p'
+
 modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p (context p) e))++")"):modelBody' p p'
 modelBody' p (stmt:p') = modelBody' p p'
 modelBody' p [] = []
+
+-- detects whether the translation of the expression will require random sampling
+isRand :: Expr -> Bool
+isRand (CALL "UnivarGaussian" _)   = True
+isRand (CALL "Bernoulli" _)        = True
+isRand (CALL "Beta" _)             = True
+isRand (CALL "Binomial" _)         = True
+isRand (CALL "BooleanDistrib" _)   = True
+isRand (CALL "Dirichlet" _)        = True
+isRand (CALL "Discrete" _)         = True
+isRand (CALL "Exponential" _)      = True
+isRand (CALL "Gamma" _)            = True
+isRand (CALL "Gaussian" _)         = True
+isRand (CALL "Geometric" _)        = True
+isRand (CALL "Laplace" _)          = True
+isRand (CALL "Multinomial" _)      = True
+isRand (CALL "MultivarGaussian" _) = True
+isRand (CALL "NegativeBinomial" _) = True
+isRand (CALL "Poisson" _)          = True
+isRand (CALL "UniformChoice" _)    = True
+isRand (CALL "UniformInt" _)       = True
+isRand (CALL "UniformReal" _)      = True
+isRand (CALL "UniformVector" _)    = True
+isRand (INT _)    = False
+isRand (STRING _) = False
+isRand (CHAR _)   = False
+isRand (DOUBLE _) = False
+isRand (BOOL _)   = False
+isRand (BLOGParse.ID _) = False
+isRand (BLOGParse.PLUS e1 e2)  = isRand e1 || isRand e2
+isRand (BLOGParse.MINUS e1 e2) = isRand e1 || isRand e2
+isRand (BLOGParse.MULT e1 e2)  = isRand e1 || isRand e2
+isRand (BLOGParse.DIV e1 e2)   = isRand e1 || isRand e2
+isRand (BLOGParse.MOD e1 e2)   = isRand e1 || isRand e2
+isRand (BLOGParse.POWER e1 e2) = isRand e1 || isRand e2
+isRand (BLOGParse.LT e1 e2)    = isRand e1 || isRand e2
+isRand (BLOGParse.GT e1 e2)    = isRand e1 || isRand e2
+isRand (BLOGParse.LEQ e1 e2)   = isRand e1 || isRand e2
+isRand (BLOGParse.GEQ e1 e2)   = isRand e1 || isRand e2
+isRand (BLOGParse.EQEQ e1 e2)  = isRand e1 || isRand e2
+isRand (BLOGParse.NEQ e1 e2)   = isRand e1 || isRand e2
+isRand (BLOGParse.AND e1 e2)   = isRand e1 || isRand e2
+isRand (BLOGParse.OR e1 e2)    = isRand e1 || isRand e2
+isRand (IMPLIES e1 e2) = isRand e1 || isRand e2
+isRand (APPLY e1 e2)   = isRand e1 || isRand e2
+isRand (NEG e) = isRand e
+isRand (BLOGParse.NOT e) = isRand e
+isRand (BLOGParse.AT e)  = isRand e --not sure what this means
+isRand (IFELSE e1 e2 e3) = isRand e1 || isRand e2 || isRand e3
+isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
 returnStmt p = ["return $ " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))]
