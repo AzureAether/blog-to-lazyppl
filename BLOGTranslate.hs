@@ -9,7 +9,7 @@ import Data.Maybe
 -- translates BLOG program to LazyPPL code
 -- last part of the translator.parser.lexer pipeline
 translator :: Program -> String
-translator p = unlines $ Prelude.map (\x -> unlines $ x p) [header, helpers, userTypes, model, mainPart, footer]
+translator p = unlines $ Prelude.map (\x -> unlines $ x p) [header, helpers, userTypes, userOrigins, model, mainPart, footer]
 
 -- the header features the readme comment and imports
 header :: Program -> [String]
@@ -29,9 +29,20 @@ userTypes p = if (types p == [])
                     "-- (none found in source file)"] 
               else "-- user-defined type declarations" : Prelude.map (declare p) (types p)
 
+-- the userOrigins section translates origin functions into Haskell functions
+-- (keeps a copy of the whole program around)
+userOrigins' :: Program -> Program -> [String]
+userOrigins' p [] = []
+userOrigins' p (DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t')) : p') = typeSignature : def : userOrigins' p p'
+  where typeSignature = ("f"++s ++ " :: "++t'++" -> Maybe "++t)
+        def = "f"++s++" ("++t'++concat [if t'' == t then " x" else " _" | (SIMPLETYPE t'',s) <- ofus p t']++" i) = x"
+userOrigins' p (stmt:p') = userOrigins' p p'
+
+userOrigins p = userOrigins' p p
+
 -- Haskell declaration of a type
 declare :: Program -> String -> String
-declare p x = "data " ++ x ++ " = " ++ x ++ " " ++ (unwords $ Prelude.map f (origins p x)) ++ "Int deriving (Show,Eq,Ord)"
+declare p x = "data " ++ x ++ " = " ++ x ++ " " ++ (unwords $ Prelude.map f (ofus p x)) ++ "Int deriving (Show,Eq,Ord)"
   where f (SIMPLETYPE t,s) = "(Maybe "++t++") "
 
 -- the list of all user-defined types in the source program
@@ -39,14 +50,6 @@ types :: Program -> [String]
 types ((DECSTMT (TYPDECL x)) : xs) = x : types xs
 types (x:xs) = types xs
 types [] = []
-
--- list of all origins (and their types) of a type (could be fused with ofus?)
-origins :: Program -> String -> [(Type,String)]
-origins ((DECSTMT (OFUDECL (SIMPLETYPE t,s') (SIMPLETYPE t'))):p) s = if s == t' 
-                                                                      then (SIMPLETYPE t,s):origins p s 
-                                                                      else origins p s
-origins (stmt:p) s = origins p s
-origins [] s = []
 
 -- list of all origin *functions* (and their types) of a type (could be fused with origins?)
 ofus :: Program -> String -> [(Type,String)]
@@ -274,7 +277,7 @@ memberString (s,_)  = "v"++s
 -- gives a unique identifier to a number statement
 -- (NB: output is a valid Haskell variable identifier.)
 numStmtName :: Statement -> String
-numStmtName (DECSTMT (NUMDECL s' origins e)) = s' ++ concat (Prelude.map fst origins)
+numStmtName (DECSTMT (NUMDECL s' os e)) = s' ++ concat (Prelude.map fst os)
 
 -- writes a line of Haskell to calculate the RHS of a number statement
 -- assumes identifier "i" is not already bound
@@ -290,7 +293,7 @@ numStmtGround p (DECSTMT (NUMDECL s' [] e)) = "let lst"++name++" = ["++s'++sourc
   where name    = numStmtName (DECSTMT (NUMDECL s' [] e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' [] e))
         lastBit = " ("++(show $ offset p s' "")++" + i) | i <- [0..fromIntegral len"
-numStmtGround p (DECSTMT (NUMDECL s' os e)) = "let lst"++name++" = concat [["++s'++sources++" i | i <- [0..n-1]] | (n"++vars++") <- len"++name++"]"
+numStmtGround p (DECSTMT (NUMDECL s' os e)) = "let lst"++name++" = concat [["++s'++sources++" (fromIntegral i) | i <- [0..n-1]] | (n"++vars++") <- len"++name++"]"
   where name    = numStmtName (DECSTMT (NUMDECL s' os e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' os e))
         vars    = concat ["," ++ (originVar os ofu) | (ofu,arg) <- os]
@@ -314,6 +317,7 @@ originVar ((ofu,arg):os) s = if (ofu == s) then arg else originVar os s
 -- source program -> program's type context -> expression to translate -> output
 transExpr :: Program -> Map String ([Type],Type) -> Expr -> String
 transExpr p c (CALL "Poisson" [n]) = "poisson " ++ transExpr p c n
+transExpr p c BLOGParse.NULL = "Nothing"
 transExpr p c (INT n)    = show (n :: Int)
 transExpr p c (DOUBLE n) = show (n :: Double)
 transExpr p c (BOOL n)   = show (n :: Bool)
@@ -324,6 +328,7 @@ transExpr p c (BLOGParse.AND  e1 e2) = op p c "&&" e1 e2
 transExpr p c (BLOGParse.NEQ  e1 e2) = op p c "/=" e1 e2
 transExpr p c (BLOGParse.EQEQ e1 e2) = op p c "==" e1 e2
 transExpr p c (COMPREHENSION [e'] args e) = "["++(transExpr p (argContext args `union` c) e')++" | "++(intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args)++"]"
+transExpr p c (IFELSE e1 e2 e3) = "if "++(transExpr p c e1)++" then "++(transExpr p c e2)++" else "++(transExpr p c e3)
 transExpr p c e = error $ "I don't know how to translate " ++ show e
 
 -- helper function of transExpr (creates type context for args)
@@ -340,13 +345,17 @@ transCall :: Program -> Map String ([Type],Type) -> Expr -> String
 transCall p c (CALL "abs" [e]) = "abs (" ++ (transExpr p c e) ++ ")"
 transCall p c (CALL "UnivarGaussian" [e1,e2]) = "normal ("++(transExpr p c e1)++") ("++(transExpr p c e2)++")"
 transCall p c (CALL "UniformChoice" [e]) = "uniformChoice ("++(transExpr p c e)++")"
+transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return "++e1'++" + i*(("++e2'++") - ("++e1'++"))}"
+  where e1' = transExpr p c e1
+        e2' = transExpr p c e2
 transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
-                               Nothing -> error $ "unable to find " ++ s
+                               Nothing -> s -- lambda-bound argument
                                Just ([],SIMPLETYPE "Bool") -> s
                                Just ([],SIMPLETYPE "Real") -> s
                                Just ([],SIMPLETYPE userType) -> s
                                Just ([], t)   -> error $ "transCall error #1"
                                Just (args, t) -> error $ "transCall error #2"
+transCall p c (CALL "size" [e]) = "length "++(transExpr p c e)
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
                                Just ([],SIMPLETYPE t') ->  s ++ " !! " ++  "???" ++ " + " ++ (transExpr p c e)
@@ -375,11 +384,12 @@ tuplefy xs  = "(" ++ (intercalate "," xs) ++ ")"
 -- maps identifiers to their types
 -- (BLOG models constants as 0-ary functions)
 context :: Program -> Map String ([Type],Type)
-context [] = fromList [("size",([SIMPLETYPE "a set of some sort"],SIMPLETYPE "Int"))]
-context ((DECSTMT (FFUDECL t s args e)) : xs) = insert s (Prelude.map fst args,t) (context xs)
-context ((DECSTMT (RFUDECL t s args e)) : xs) = insert s (Prelude.map fst args,t) (context xs)
-context ((DECSTMT (DNTDECL s members)) : xs) = (mapify s members) `union` (context xs)
-context (x : xs) = context xs
+context [] = fromList [("size",([SIMPLETYPE "a set of some sort"],SIMPLETYPE "Int"))] -- UNFINISHED
+context ((DECSTMT (FFUDECL t s args e)) : p) = insert s (Prelude.map fst args,t) (context p)
+context ((DECSTMT (RFUDECL t s args e)) : p) = insert s (Prelude.map fst args,t) (context p)
+context ((DECSTMT (DNTDECL s members)) : p) = (mapify s members) `union` (context p)
+context ((DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t'))) : p) = insert s ([SIMPLETYPE t'],SIMPLETYPE t) (context p)
+context (stmt : p) = context p
 
 -- helper function of context
 -- creates the type map of a Distinct statement
@@ -490,4 +500,9 @@ main = do
     fileName <- getLine
     string <- readFile ("example/"++fileName++".blog")
     putStrLn $ (translator.parser.lexer) string
+
+debug :: IO ()
+debug = do
+    string <- readFile "example/aircraft-static.blog"
+    putStrLn $ (show $ ofus ((parser.lexer) string) "Blip")
     
