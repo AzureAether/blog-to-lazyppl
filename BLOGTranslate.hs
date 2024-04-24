@@ -470,11 +470,13 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "let tree = randomTree (mkStdGen 0)\n",
               "-- loop to yield data points",
               "let (answers,rejections) = (rejectionSampler 10000) $ runProb (sequence (repeat model)) tree\n",
+              "let consistentWorlds = 10000 / (fromIntegral (10000 + rejections))",
+              "let worlds = length (distribution answers)",
               "putStrLn \"======  LW Trial Stats  ======\"",
-              "putStrLn \"Log of average likelihood weight (this trial): ???\"",
-              "putStrLn \"Average likelihood weight (this trial): ???\"",
-              "putStrLn \"Fraction of consistent worlds (this trial): ???\"",
-              "putStrLn \"Fraction of consistent worlds (running avg, all trials): ???\"",
+              "putStrLn $ \"Log of average likelihood weight (this trial): \" ++ show (log $ 1 / fromIntegral worlds)",
+              "putStrLn $ \"Average likelihood weight (this trial): \"        ++ show (1 / fromIntegral worlds)",
+              "putStrLn $ \"Fraction of consistent worlds (this trial): \"    ++ show consistentWorlds",
+              "putStrLn $ \"Fraction of consistent worlds (running avg, all trials): \" ++ show consistentWorlds",
               "putStrLn \"======== Query Results ========\"",
               "putStrLn \"Number of samples: 10000\""] ++
               results p ++
