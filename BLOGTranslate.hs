@@ -84,12 +84,17 @@ helpers = const ["-- helper functions (used in all translations)",
                  "uniformChoice :: [a] -> Prob a",
                  "uniformChoice xs = do",
                  "    choice <- uniformdiscrete (length xs)",
-                 "    return (xs !! choice)"]
+                 "    return (xs !! choice)",
+                 "",
+                 "rejectionSampler :: Int -> [Maybe a] -> ([a],Int)",
+                 "rejectionSampler 0 _ = ([],0)",
+                 "rejectionSampler n (Nothing:xs) = let (xs',r) = rejectionSampler  n    xs in (xs',r+1)",
+                 "rejectionSampler n (Just x :xs) = let (xs',r) = rejectionSampler (n-1) xs in (x:xs',r)"]
 
 -- the statistical model of the BLOG program, in LazyPPL's Prob monad
 model :: Program -> [String]
 model p = ["-- model from source BLOG file",
-           "model :: Prob " ++ (tuplefy $ queryTypes p),
+           "model :: Prob (Maybe " ++ (tuplefy $ queryTypes p) ++ ")",
            "model = do"] ++ 
            Prelude.map ("    "++) ((userTypeInits p) ++
            [""] ++
@@ -176,7 +181,7 @@ isRand (IFELSE e1 e2 e3) = isRand e1 || isRand e2 || isRand e3
 isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
-returnStmt p = ["return $ " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))]
+returnStmt p = ["return $ Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))]
 
 userTypeInits :: Program -> [String]
 userTypeInits p = if ts == [] 
@@ -464,7 +469,7 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "-- establish random seed",
               "let tree = randomTree (mkStdGen 0)\n",
               "-- loop to yield data points",
-              "let answers = runProb (sequence (take 10000 $ repeat model)) tree\n",
+              "let (answers,rejections) = (rejectionSampler 10000) $ runProb (sequence (repeat model)) tree\n",
               "putStrLn \"======  LW Trial Stats  ======\"",
               "putStrLn \"Log of average likelihood weight (this trial): ???\"",
               "putStrLn \"Average likelihood weight (this trial): ???\"",
