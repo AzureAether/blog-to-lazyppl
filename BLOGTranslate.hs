@@ -193,7 +193,7 @@ isRand (IFELSE e1 e2 e3) = isRand e1 || isRand e2 || isRand e3
 isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
-returnStmt p = ["return if "++observations++" then Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))++" else Nothing"]
+returnStmt p = ["return $ if "++observations++" then Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))++" else Nothing"]
   where observations = intercalate " && " ["obs"++show n | n <- [1..obsCount p]]
 
 userTypeInits :: Program -> [String]
