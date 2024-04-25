@@ -112,8 +112,8 @@ modelBody' :: Program -> Program -> [String]
 -- the query is handled by returnStmt
 modelBody' p (QRYSTMT e : p')                  = modelBody' p p'
 
--- evidence statements not yet implemented (should score 1 iff evidence holds)
-modelBody' p (EVDSTMT (e1,e2) : p')            = modelBody' p p'
+-- evidence statements are handled by returnStmt
+modelBody' p (EVDSTMT (e1,e2) : p')            = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = " ++ (transExpr p (context p) e1) ++ " == " ++ (transExpr p (context p) e2)) : modelBody' p p'
 
 -- nullary random functions (where RHS is built-in distribution)
 modelBody' p (DECSTMT (RFUDECL (SIMPLETYPE "Real") s [] (CALL "UnivarGaussian" [arg1,arg2])) : p') = (s++" <- normal ("++(transExpr p (context p) arg1)++") ("++(transExpr p (context p) arg2)++")"):modelBody' p p'
@@ -129,6 +129,18 @@ modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let "++s++(unwords (Prelude
 modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p (context p) e))++")"):modelBody' p p'
 modelBody' p (stmt:p') = modelBody' p p'
 modelBody' p [] = []
+
+-- helper function of modelBody'
+obsNum :: Program -> Statement -> Int
+obsNum [] _ = 1
+obsNum (EVDSTMT (e1,e2):p') stmt = if stmt==(EVDSTMT (e1,e2)) then 1 else 1 + obsNum p' stmt
+obsNum (stmt':p') stmt = obsNum p' stmt
+
+-- counts the number of obs statements in a program
+obsCount :: Program -> Int
+obsCount [] = 0
+obsCount (EVDSTMT (e1,e2):p') = 1 + obsCount p'
+obsCount (stmt:p) = obsCount p
 
 -- detects whether the translation of the expression will require random sampling
 isRand :: Expr -> Bool
@@ -181,7 +193,8 @@ isRand (IFELSE e1 e2 e3) = isRand e1 || isRand e2 || isRand e3
 isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
-returnStmt p = ["return $ Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))]
+returnStmt p = ["return if "++observations++" then Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))++" else Nothing"]
+  where observations = intercalate " && " ["obs"++show n | n <- [1..obsCount p]]
 
 userTypeInits :: Program -> [String]
 userTypeInits p = if ts == [] 

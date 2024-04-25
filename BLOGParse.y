@@ -339,7 +339,7 @@ data Statement
     = DECSTMT Declaration
     | EVDSTMT (Expr, Expr)   -- meaning "observe these two are equal"
     | QRYSTMT Expr           -- meaning "query the value of this expression"
-    deriving Show
+    deriving (Show,Eq)
 
 data Declaration
     = DECPLACEHOLD
@@ -351,7 +351,7 @@ data Declaration
     | OFUDECL (Type, String) Type
     | NUMDECL String [(String,String)] Expr
     | DNTDECL String [(String,Int)]
-    deriving Show
+    deriving (Show,Eq)
 
 data Type
     = SIMPLETYPE String
@@ -395,6 +395,6 @@ data Expr
     | COMPREHENSION [Expr] [(Type,String)] Expr
     | EXISTS Type String Expr
     | FORALL Type String Expr
-    deriving Show
+    deriving (Show,Eq)
 
 }

@@ -7,11 +7,11 @@ import qualified Data.Bits as Bits
 import Control.Applicative(Applicative(..))
 import Control.Monad (ap)
 
--- parser produced by Happy Version 1.20.1.1
+-- parser produced by Happy Version 1.19.12
 
 data HappyAbsSyn t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16 t17 t18 t19 t20 t21 t22 t23 t24 t25 t26 t27 t28 t29 t30 t31 t32 t33 t34 t35 t36 t37 t38 t39 t40 t41 t42 t43 t44 t45 t46 t47 t48 t49 t50 t51 t52 t53 t54 t55 t56 t57
 	= HappyTerminal (Token)
-	| HappyErrorToken Prelude.Int
+	| HappyErrorToken Int
 	| HappyAbsSyn4 t4
 	| HappyAbsSyn5 t5
 	| HappyAbsSyn6 t6
@@ -67,7 +67,7 @@ data HappyAbsSyn t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16 t17 t18 t19 t20 t
 	| HappyAbsSyn56 t56
 	| HappyAbsSyn57 t57
 
-happyExpList :: Happy_Data_Array.Array Prelude.Int Prelude.Int
+happyExpList :: Happy_Data_Array.Array Int Int
 happyExpList = Happy_Data_Array.listArray (0,1689) ([0,0,0,32768,6,0,63488,3,0,0,0,52,0,49152,31,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,26656,0,0,16256,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4096,0,128,0,0,0,0,32768,0,0,0,0,0,0,0,28,0,0,0,0,0,0,57632,18919,277,0,0,0,0,2304,20287,2218,0,0,0,0,2048,0,0,0,0,0,0,16384,0,0,0,0,0,0,0,14,0,0,0,0,0,0,112,0,0,0,0,0,0,896,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2048,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,8,0,0,0,2048,0,0,0,0,0,0,16384,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,33536,61952,507,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,112,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4608,40574,4436,0,0,0,0,36864,62448,35492,0,0,0,0,32768,3,0,0,0,0,0,0,28,0,0,0,0,0,0,57632,18919,277,0,0,0,0,2304,20287,2218,0,0,0,0,18432,31224,17746,0,0,0,0,16384,53186,10899,2,0,0,0,0,32274,21662,17,0,0,0,0,61584,42227,138,0,0,0,0,0,4192,65088,63,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,2048,0,0,0,0,1024,0,0,0,0,0,0,0,0,16,0,0,0,0,4096,0,0,0,0,0,0,0,0,0,0,0,0,0,0,416,0,0,254,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,2048,0,0,8,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,61584,42227,138,0,0,0,0,128,0,0,0,0,0,0,0,2,0,0,0,0,0,8192,59361,5449,1,0,0,0,0,16137,43599,8,0,0,0,0,63560,21113,69,0,0,0,0,49728,37839,554,0,0,0,0,4608,40574,4436,0,0,0,0,36864,62448,35492,0,0,0,0,32768,40836,21799,4,0,0,0,0,64548,43324,34,0,0,0,0,57632,18919,277,0,0,0,0,2304,20287,2218,0,0,0,0,18432,31224,17746,0,0,0,0,16384,53186,10899,2,0,0,0,0,32274,21662,17,0,0,0,0,61584,42227,138,0,0,0,0,33920,10143,1109,0,0,0,0,9216,15612,8873,0,0,0,0,8192,59361,5449,1,0,0,0,0,0,0,0,0,0,0,0,2,262,63460,3,0,0,0,0,0,64,0,0,0,0,64,8192,0,0,0,0,0,0,0,4096,0,0,0,0,36864,40836,21799,4,0,0,0,0,0,0,4,0,0,0,0,8,1048,57296,15,0,0,0,0,0,64,0,0,0,0,0,32768,0,0,0,0,0,0,0,4096,0,0,0,0,0,0,32768,0,0,0,0,0,0,524,61385,7,0,0,0,0,4192,32322,63,0,0,0,0,33536,61954,507,0,0,0,8192,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,32768,40836,21799,4,0,0,0,0,64548,43324,34,0,0,0,0,0,0,0,0,0,0,0,320,0,0,0,0,0,0,0,0,1024,0,0,0,0,49152,1,512,0,0,0,0,0,14,4096,0,0,0,0,0,112,0,0,0,0,0,0,128,0,0,0,0,0,0,1024,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,448,0,2,0,0,0,0,3584,0,0,0,0,0,0,0,0,256,0,0,0,0,0,0,2048,0,0,0,0,0,28,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,512,0,0,0,4096,0,0,0,0,0,0,32768,2,0,0,0,0,0,0,256,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,57344,0,512,0,0,0,0,0,0,0,256,0,0,0,0,2048,0,0,0,0,0,0,80,0,0,0,0,0,0,0,0,0,0,0,0,0,5120,0,0,0,0,0,0,0,0,2048,0,0,0,0,0,0,0,0,0,0,0,0,57632,18919,277,0,0,0,0,2304,20287,2218,0,0,0,0,18432,31224,17746,0,0,0,0,0,0,2048,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7168,0,0,0,0,0,0,0,0,0,0,0,0,0,16384,16137,43599,8,0,0,0,0,63562,21113,69,0,0,0,0,49728,37839,554,0,0,0,0,0,0,0,0,0,0,0,512,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49152,32800,32508,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1048,57264,15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,32274,21662,17,0,0,0,0,0,32768,0,0,0,0,0,0,4192,32320,63,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,16384,1,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,0,0,0,640,0,0,0,0,0,0,36864,62448,35492,0,0,0,0,0,24576,16400,16254,0,0,0,0,0,0,0,0,0,0,0,8,1048,57232,15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2048,0,0,0,0,0,0,0,0,0,0,0,0,0,9216,15612,8873,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,32768,0,0,0,0,0,64548,43324,34,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,49152,1,0,0,0,0,0,32768,14,0,0,0,0,0,0,112,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,3712,0,0,0,0,0,0,0,0,0,0,0,0,0,40960,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8384,64640,126,0,0,0,0,0,0,0,0,0,0,16384,53186,10899,2,0,0,0,0,32768,65,65021,0,0,0,0,0,0,0,0,0,0,0,33920,10143,1109,0,0,0,0,9216,15612,8873,0,0,0,0,0,0,512,0,0,0,0,16384,1,0,0,0,0,0,0,0,0,0,0,0,0,0,80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8384,64640,126,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	])
 
@@ -75,14 +75,14 @@ happyExpList = Happy_Data_Array.listArray (0,1689) ([0,0,0,32768,6,0,63488,3,0,0
 happyExpListPerState st =
     token_strs_expected
   where token_strs = ["error","%dummy","%start_parser","program","opt_statement_lst","statement_lst","statement","declaration_stmt","type_decl","type","type_type","list_type","array_type_or_sub","array_type","map_type","opt_parenthesized_type_var_lst","parenthesized_type_var_lst","extra_commas","type_var_lst","fixed_func_decl","rand_func_decl","number_stmt","opt_parenthesized_origin_var_list","origin_var_list","origin_func_decl","distinct_decl","id_or_subid_list","id_or_subid","distribution_decl","refer_name","dependency_statement_body","parameter_decl","expression","literal","operation_expr","unary_operation_expr","quantified_formula","function_call","if_expr","case_expr","opt_expression_list","expression_list","semi_colon_separated_expression_list","semi_ending_expression_list","map_construct_expression","expression_pair_list","number_expr","list_expr","set_expr","explicit_set","comprehension_expr","opt_colon_expr","tuple_set","evidence_stmt","evidence","value_evidence","query_stmt","SEMI","COMMA","DOT","ID","LIST","MAP","NUMSIGN","DISTRIB","DISTRIBUTION","PARAM","COLON","INT_LITERAL","STRING_LITERAL","CHAR_LITERAL","DOUBLE_LITERAL","BOOLEAN_LITERAL","NULL","AND","OR","NOT","AT","FORALL","EXISTS","FOR","DOUBLERIGHTARROW","IF","THEN","ELSE","CASE","IN","LPAREN","RPAREN","LBRACE","RBRACE","LBRACKET","RBRACKET","RIGHTARROW","PLUS","MINUS","MULT","DIV","MOD","POWER","EQ","EQEQ","NEQ","LT","LEQ","GEQ","GT","OBS","QUERY","TYPE","DISTINCT","FIXED","RANDOM","ORIGIN","%eof"]
-        bit_start = st Prelude.* 115
-        bit_end = (st Prelude.+ 1) Prelude.* 115
+        bit_start = st * 115
+        bit_end = (st + 1) * 115
         read_bit = readArrayBit happyExpList
-        bits = Prelude.map read_bit [bit_start..bit_end Prelude.- 1]
-        bits_indexed = Prelude.zip bits [0..114]
-        token_strs_expected = Prelude.concatMap f bits_indexed
-        f (Prelude.False, _) = []
-        f (Prelude.True, nr) = [token_strs Prelude.!! nr]
+        bits = map read_bit [bit_start..bit_end - 1]
+        bits_indexed = zip bits [0..114]
+        token_strs_expected = concatMap f bits_indexed
+        f (False, _) = []
+        f (True, nr) = [token_strs !! nr]
 
 action_0 (64) = happyShift action_16
 action_0 (66) = happyShift action_17
@@ -4352,25 +4352,25 @@ newtype HappyIdentity a = HappyIdentity a
 happyIdentity = HappyIdentity
 happyRunIdentity (HappyIdentity a) = a
 
-instance Prelude.Functor HappyIdentity where
+instance Functor HappyIdentity where
     fmap f (HappyIdentity a) = HappyIdentity (f a)
 
 instance Applicative HappyIdentity where
     pure  = HappyIdentity
     (<*>) = ap
-instance Prelude.Monad HappyIdentity where
+instance Monad HappyIdentity where
     return = pure
     (HappyIdentity p) >>= q = q p
 
 happyThen :: () => HappyIdentity a -> (a -> HappyIdentity b) -> HappyIdentity b
-happyThen = (Prelude.>>=)
+happyThen = (>>=)
 happyReturn :: () => a -> HappyIdentity a
-happyReturn = (Prelude.return)
-happyThen1 m k tks = (Prelude.>>=) m (\a -> k a tks)
+happyReturn = (return)
+happyThen1 m k tks = (>>=) m (\a -> k a tks)
 happyReturn1 :: () => a -> b -> HappyIdentity a
-happyReturn1 = \a tks -> (Prelude.return) a
-happyError' :: () => ([(Token)], [Prelude.String]) -> HappyIdentity a
-happyError' = HappyIdentity Prelude.. (\(tokens, _) -> parseError tokens)
+happyReturn1 = \a tks -> (return) a
+happyError' :: () => ([(Token)], [String]) -> HappyIdentity a
+happyError' = HappyIdentity . (\(tokens, _) -> parseError tokens)
 parser tks = happyRunIdentity happySomeParser where
  happySomeParser = happyThen (happyParse action_0 tks) (\x -> case x of {HappyAbsSyn4 z -> happyReturn z; _other -> notHappyAtAll })
 
@@ -4395,7 +4395,7 @@ data Statement
     = DECSTMT Declaration
     | EVDSTMT (Expr, Expr)   -- meaning "observe these two are equal"
     | QRYSTMT Expr           -- meaning "query the value of this expression"
-    deriving Show
+    deriving (Show,Eq)
 
 data Declaration
     = DECPLACEHOLD
@@ -4407,7 +4407,7 @@ data Declaration
     | OFUDECL (Type, String) Type
     | NUMDECL String [(String,String)] Expr
     | DNTDECL String [(String,Int)]
-    deriving Show
+    deriving (Show,Eq)
 
 data Type
     = SIMPLETYPE String
@@ -4451,7 +4451,7 @@ data Expr
     | COMPREHENSION [Expr] [(Type,String)] Expr
     | EXISTS Type String Expr
     | FORALL Type String Expr
-    deriving Show
+    deriving (Show,Eq)
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 -- $Id: GenericTemplate.hs,v 1.26 2005/01/14 14:47:22 simonmar Exp $
 
@@ -4496,7 +4496,7 @@ data Expr
 
 
 
-data Happy_IntList = HappyCons Prelude.Int Happy_IntList
+data Happy_IntList = HappyCons Int Happy_IntList
 
 
 
@@ -4603,7 +4603,7 @@ indexShortOffAddr arr off = arr Happy_Data_Array.! off
 
 
 {-# INLINE happyLt #-}
-happyLt x y = (x Prelude.< y)
+happyLt x y = (x < y)
 
 
 
@@ -4611,7 +4611,7 @@ happyLt x y = (x Prelude.< y)
 
 
 readArrayBit arr bit =
-    Bits.testBit (indexShortOffAddr arr (bit `Prelude.div` 16)) (bit `Prelude.mod` 16)
+    Bits.testBit (indexShortOffAddr arr (bit `div` 16)) (bit `mod` 16)
 
 
 
@@ -4624,8 +4624,8 @@ readArrayBit arr bit =
 
 
 newtype HappyState b c = HappyState
-        (Prelude.Int ->                    -- token number
-         Prelude.Int ->                    -- token number (yes, again)
+        (Int ->                    -- token number
+         Int ->                    -- token number (yes, again)
          b ->                           -- token semantic value
          HappyState b c ->              -- current state
          [HappyState b c] ->            -- state stack
@@ -4672,7 +4672,7 @@ happySpecReduce_3 nt fn j tk _ ((_):(((_):(sts@(((st@(HappyState (action))):(_))
 happyReduce k i fn (1) tk st sts stk
      = happyFail [] (1) tk st sts stk
 happyReduce k nt fn j tk st sts stk
-     = case happyDrop (k Prelude.- ((1) :: Prelude.Int)) sts of
+     = case happyDrop (k - ((1) :: Int)) sts of
          sts1@(((st1@(HappyState (action))):(_))) ->
                 let r = fn stk in  -- it doesn't hurt to always seq here...
                 happyDoSeq r (action nt j tk st1 sts1 r)
@@ -4696,17 +4696,17 @@ happyMonad2Reduce k nt fn j tk st sts stk =
 
 
 
-             _ = nt :: Prelude.Int
+             _ = nt :: Int
              new_state = action
 
           in
           happyThen1 (fn stk tk) (\r -> happyNewToken new_state sts1 (r `HappyStk` drop_stk))
 
 happyDrop (0) l = l
-happyDrop n ((_):(t)) = happyDrop (n Prelude.- ((1) :: Prelude.Int)) t
+happyDrop n ((_):(t)) = happyDrop (n - ((1) :: Int)) t
 
 happyDropStk (0) l = l
-happyDropStk n (x `HappyStk` xs) = happyDropStk (n Prelude.- ((1)::Prelude.Int)) xs
+happyDropStk n (x `HappyStk` xs) = happyDropStk (n - ((1)::Int)) xs
 
 -----------------------------------------------------------------------------
 -- Moving to a new state after a reduction
@@ -4751,7 +4751,7 @@ happyFail explist i tk (HappyState (action)) sts stk =
 -- Internal happy errors:
 
 notHappyAtAll :: a
-notHappyAtAll = Prelude.error "Internal Happy error\n"
+notHappyAtAll = error "Internal Happy error\n"
 
 -----------------------------------------------------------------------------
 -- Hack to get the typechecker to accept our action functions
@@ -4769,7 +4769,7 @@ notHappyAtAll = Prelude.error "Internal Happy error\n"
 --      happySeq = happyDontSeq
 
 happyDoSeq, happyDontSeq :: a -> b -> b
-happyDoSeq   a b = a `Prelude.seq` b
+happyDoSeq   a b = a `seq` b
 happyDontSeq a b = b
 
 -----------------------------------------------------------------------------
