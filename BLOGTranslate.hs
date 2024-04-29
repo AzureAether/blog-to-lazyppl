@@ -113,7 +113,7 @@ modelBody' :: Program -> Program -> [String]
 modelBody' p (QRYSTMT e : p')                  = modelBody' p p'
 
 -- evidence statements are handled by returnStmt
-modelBody' p (EVDSTMT (e1,e2) : p')            = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = " ++ (transExpr p (context p) e1) ++ " == " ++ (transExpr p (context p) e2)) : modelBody' p p'
+modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = (" ++ (transExpr p (context p) e1) ++ ") == (" ++ (transExpr p (context p) e2) ++ ")") : modelBody' p p' 
 
 -- nullary random functions (where RHS is built-in distribution)
 modelBody' p (DECSTMT (RFUDECL (SIMPLETYPE "Real") s [] (CALL "UnivarGaussian" [arg1,arg2])) : p') = (s++" <- normal ("++(transExpr p (context p) arg1)++") ("++(transExpr p (context p) arg2)++")"):modelBody' p p'
@@ -335,18 +335,39 @@ originVar ((ofu,arg):os) s = if (ofu == s) then arg else originVar os s
 -- source program -> program's type context -> expression to translate -> output
 transExpr :: Program -> Map String ([Type],Type) -> Expr -> String
 transExpr p c (CALL "Poisson" [n]) = "poisson " ++ transExpr p c n
-transExpr p c BLOGParse.NULL = "Nothing"
+-- other BLOG inbuilt distributions go here.
 transExpr p c (INT n)    = show (n :: Int)
+transExpr p c (STRING s) = show s
 transExpr p c (DOUBLE n) = show (n :: Double)
 transExpr p c (BOOL n)   = show (n :: Bool)
+transExpr p c BLOGParse.NULL = error "why am I translating null?"
+transExpr p c (BLOGParse.ID s) = s
+transExpr p c (BLOGParse.PLUS  e1 e2) = op p c "+" e1 e2
+transExpr p c (BLOGParse.MINUS e1 e2) = op p c "-" e1 e2
+transExpr p c (BLOGParse.MULT  e1 e2) = op p c "*" e1 e2
+transExpr p c (BLOGParse.DIV   e1 e2) = op p c "/" e1 e2
+transExpr p c (BLOGParse.MOD   e1 e2) = op p c "`mod`" e1 e2 -- will cause type issues; FIX!
+transExpr p c (BLOGParse.POWER e1 e2) = op p c "^" e1 e2     -- may cause type issues; INVESTIGATE!
+transExpr p c (BLOGParse.LT    e1 e2) = op p c "<" e1 e2
+transExpr p c (BLOGParse.GT    e1 e2) = op p c ">" e1 e2
+transExpr p c (BLOGParse.LEQ   e1 e2) = op p c "<=" e1 e2
+transExpr p c (BLOGParse.GEQ   e1 e2) = op p c ">=" e1 e2
+transExpr p c (BLOGParse.EQEQ  e1 e2) = op p c "==" e1 e2
+transExpr p c (BLOGParse.NEQ   e1 e2) = op p c "/=" e1 e2
+transExpr p c (BLOGParse.AND   e1 e2) = op p c "&&" e1 e2
+transExpr p c (BLOGParse.OR    e1 e2) = op p c "||" e1 e2
+transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- will confuse people; CLARIFY!
+transExpr p c (BLOGParse.APPLY e1 e2) = error "APPLY not implemented"
+transExpr p c (BLOGParse.NEG e) = "(*-1) $ " ++ transExpr p c e
+transExpr p c (BLOGParse.NOT e) = "not $ " ++ transExpr p c e
+transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translator (timesteps not implemented)"
+transExpr p c (IFELSE e1 e2 e3) = "if "++(transExpr p c e1)++" then "++(transExpr p c e2)++" else "++(transExpr p c e3)
+transExpr p c (IFTHEN _ _) = error "IFTHEN may be deprecated syntax"
 transExpr p c (CALL s args) = transCall p c (CALL s args)
+transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented"
+transExpr p c (COMPREHENSION [e'] args e) = "["++(transExpr p (argContext args `union` c) e')++" | "++(intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args)++"]"
 transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "any id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "]"
 transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "all id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "]"
-transExpr p c (BLOGParse.AND  e1 e2) = op p c "&&" e1 e2
-transExpr p c (BLOGParse.NEQ  e1 e2) = op p c "/=" e1 e2
-transExpr p c (BLOGParse.EQEQ e1 e2) = op p c "==" e1 e2
-transExpr p c (COMPREHENSION [e'] args e) = "["++(transExpr p (argContext args `union` c) e')++" | "++(intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args)++"]"
-transExpr p c (IFELSE e1 e2 e3) = "if "++(transExpr p c e1)++" then "++(transExpr p c e2)++" else "++(transExpr p c e3)
 transExpr p c e = error $ "I don't know how to translate " ++ show e
 
 -- helper function of transExpr (creates type context for args)
