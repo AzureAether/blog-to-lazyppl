@@ -3721,10 +3721,11 @@ happyReduction_73 (HappyAbsSyn38  happy_var_1)
 happyReduction_73 _  = notHappyAtAll 
 
 happyReduce_74 = happySpecReduce_1  33 happyReduction_74
-happyReduction_74 _
+happyReduction_74 (HappyAbsSyn48  happy_var_1)
 	 =  HappyAbsSyn33
-		 (EXPPLACEHOLD
+		 (happy_var_1
 	)
+happyReduction_74 _  = notHappyAtAll 
 
 happyReduce_75 = happySpecReduce_1  33 happyReduction_75
 happyReduction_75 (HappyAbsSyn45  happy_var_1)
@@ -3761,10 +3762,11 @@ happyReduction_79 (HappyAbsSyn39  happy_var_1)
 happyReduction_79 _  = notHappyAtAll 
 
 happyReduce_80 = happySpecReduce_1  33 happyReduction_80
-happyReduction_80 _
+happyReduction_80 (HappyAbsSyn40  happy_var_1)
 	 =  HappyAbsSyn33
-		 (EXPPLACEHOLD
+		 (happy_var_1
 	)
+happyReduction_80 _  = notHappyAtAll 
 
 happyReduce_81 = happySpecReduce_1  34 happyReduction_81
 happyReduction_81 (HappyTerminal (BLOGLex.STRING_LITERAL happy_var_1))
@@ -4052,13 +4054,13 @@ happyReduction_113 ((HappyAbsSyn33  happy_var_4) `HappyStk`
 	) `HappyStk` happyRest
 
 happyReduce_114 = happyReduce 4 40 happyReduction_114
-happyReduction_114 (_ `HappyStk`
+happyReduction_114 ((HappyAbsSyn45  happy_var_4) `HappyStk`
 	_ `HappyStk`
-	_ `HappyStk`
+	(HappyAbsSyn33  happy_var_2) `HappyStk`
 	_ `HappyStk`
 	happyRest)
 	 = HappyAbsSyn40
-		 (NAN
+		 (BLOGParse.CASE happy_var_2 happy_var_4
 	) `HappyStk` happyRest
 
 happyReduce_115 = happySpecReduce_1  41 happyReduction_115
@@ -4099,32 +4101,36 @@ happyReduction_119 (HappyAbsSyn42  happy_var_3)
 happyReduction_119 _ _ _  = notHappyAtAll 
 
 happyReduce_120 = happySpecReduce_2  43 happyReduction_120
-happyReduction_120 _
-	_
+happyReduction_120 (HappyAbsSyn43  happy_var_2)
+	(HappyAbsSyn44  happy_var_1)
 	 =  HappyAbsSyn43
-		 (NAN
+		 (happy_var_1 ++ happy_var_2
 	)
+happyReduction_120 _ _  = notHappyAtAll 
 
 happyReduce_121 = happySpecReduce_2  43 happyReduction_121
-happyReduction_121 _
-	_
+happyReduction_121 (HappyAbsSyn42  happy_var_2)
+	(HappyAbsSyn44  happy_var_1)
 	 =  HappyAbsSyn43
-		 (NAN
+		 (happy_var_1 ++ happy_var_2
 	)
+happyReduction_121 _ _  = notHappyAtAll 
 
 happyReduce_122 = happySpecReduce_2  44 happyReduction_122
 happyReduction_122 _
-	_
+	(HappyAbsSyn42  happy_var_1)
 	 =  HappyAbsSyn44
-		 (NAN
+		 (happy_var_1
 	)
+happyReduction_122 _ _  = notHappyAtAll 
 
 happyReduce_123 = happySpecReduce_2  44 happyReduction_123
 happyReduction_123 _
-	_
+	(HappyAbsSyn44  happy_var_1)
 	 =  HappyAbsSyn44
-		 (NAN
+		 (happy_var_1
 	)
+happyReduction_123 _ _  = notHappyAtAll 
 
 happyReduce_124 = happySpecReduce_3  45 happyReduction_124
 happyReduction_124 _
@@ -4171,27 +4177,30 @@ happyReduction_128 _
 
 happyReduce_129 = happySpecReduce_3  48 happyReduction_129
 happyReduction_129 _
-	_
+	(HappyAbsSyn41  happy_var_2)
 	_
 	 =  HappyAbsSyn48
-		 (NAN
+		 (BLOGParse.LIST happy_var_2
 	)
+happyReduction_129 _ _ _  = notHappyAtAll 
 
 happyReduce_130 = happySpecReduce_3  48 happyReduction_130
 happyReduction_130 _
-	_
+	(HappyAbsSyn43  happy_var_2)
 	_
 	 =  HappyAbsSyn48
-		 (NAN
+		 (BLOGParse.LIST happy_var_2
 	)
+happyReduction_130 _ _ _  = notHappyAtAll 
 
 happyReduce_131 = happySpecReduce_3  48 happyReduction_131
 happyReduction_131 _
-	_
+	(HappyAbsSyn51  happy_var_2)
 	_
 	 =  HappyAbsSyn48
-		 (NAN
+		 (happy_var_2
 	)
+happyReduction_131 _ _ _  = notHappyAtAll 
 
 happyReduce_132 = happySpecReduce_1  49 happyReduction_132
 happyReduction_132 (HappyAbsSyn50  happy_var_1)
@@ -4448,7 +4457,9 @@ data Expr
     | IFTHEN Expr Expr
     | CALL String [Expr]
     | MAPCONSTRUCT [(Expr,Expr)]
+    | CASE Expr Expr
     | COMPREHENSION [Expr] [(Type,String)] Expr
+    | LIST [Expr]
     | EXISTS Type String Expr
     | FORALL Type String Expr
     deriving (Show,Eq)

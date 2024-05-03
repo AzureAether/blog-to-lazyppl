@@ -202,13 +202,13 @@ expression :
     operation_expr             { $1 }
     | literal                  { $1 }
     | function_call            { $1 }
-    | list_expr                { EXPPLACEHOLD }
+    | list_expr                { $1 }
     | map_construct_expression { $1 }
     | quantified_formula       { $1 }
     | set_expr                 { $1 }
     | number_expr              { EXPPLACEHOLD }
     | if_expr                  { $1 }
-    | case_expr                { EXPPLACEHOLD }
+    | case_expr                { $1 }
 
 literal :
     STRING_LITERAL    { STRING $1 }
@@ -248,7 +248,7 @@ quantified_formula :
     | EXISTS type ID expression  { BLOGParse.EXISTS $2 $3 $4 }
 
 function_call :
-    refer_name LPAREN opt_expression_list RPAREN  { CALL $1 $3}
+    refer_name LPAREN opt_expression_list RPAREN  { CALL $1 $3 }
     | refer_name                                  { CALL $1 [] }
 
 if_expr :
@@ -256,7 +256,7 @@ if_expr :
     | IF expression THEN expression                { IFTHEN $2 $4 }
 
 case_expr :
-    CASE expression IN map_construct_expression  { NAN }
+    CASE expression IN map_construct_expression { BLOGParse.CASE $2 $4 }
 
 opt_expression_list :
     expression_list   { $1 }
@@ -268,12 +268,12 @@ expression_list :
     | expression extra_commas expression_list   { $1 : $3 }
 
 semi_colon_separated_expression_list :
-    semi_ending_expression_list semi_colon_separated_expression_list  { NAN } 
-    | semi_ending_expression_list expression_list                     { NAN }
+    semi_ending_expression_list semi_colon_separated_expression_list  { $1 ++ $2 } 
+    | semi_ending_expression_list expression_list                     { $1 ++ $2 }
 
 semi_ending_expression_list :
-    expression_list SEMI                { NAN }
-    | semi_ending_expression_list SEMI  { NAN }
+    expression_list SEMI                { $1 }
+    | semi_ending_expression_list SEMI  { $1 }
 
 map_construct_expression :
     LBRACE expression_pair_list RBRACE  { MAPCONSTRUCT $2 }
@@ -287,9 +287,9 @@ number_expr :
     | NUMSIGN type    { NAN }
 
 list_expr :
-    LBRACKET opt_expression_list RBRACKET                     { NAN }
-    | LBRACKET semi_colon_separated_expression_list RBRACKET  { NAN }
-    | LBRACKET comprehension_expr RBRACKET                    { NAN }
+    LBRACKET opt_expression_list RBRACKET                     { BLOGParse.LIST $2 }
+    | LBRACKET semi_colon_separated_expression_list RBRACKET  { BLOGParse.LIST $2 }
+    | LBRACKET comprehension_expr RBRACKET                    { $2 }
 
 set_expr :
     explicit_set  { $1 }
@@ -392,7 +392,9 @@ data Expr
     | IFTHEN Expr Expr
     | CALL String [Expr]
     | MAPCONSTRUCT [(Expr,Expr)]
+    | CASE Expr Expr
     | COMPREHENSION [Expr] [(Type,String)] Expr
+    | LIST [Expr]
     | EXISTS Type String Expr
     | FORALL Type String Expr
     deriving (Show,Eq)

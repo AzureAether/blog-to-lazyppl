@@ -50,6 +50,8 @@ tokens :-
   null                           { \s -> NULL }
   list                           { \s -> LIST }
   map                            { \s -> MAP }
+  case                           { \s -> CASE }
+  in                             { \s -> IN }
   for                            { \s -> FOR }
   forall                         { \s -> FORALL }
   exists                         { \s -> EXISTS }

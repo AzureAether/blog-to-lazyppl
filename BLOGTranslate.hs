@@ -317,11 +317,15 @@ transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translat
 transExpr p c (IFELSE e1 e2 e3) = "if "++(transExpr p c e1)++" then "++(transExpr p c e2)++" else "++(transExpr p c e3)
 transExpr p c (IFTHEN _ _) = error "IFTHEN may be deprecated syntax"
 transExpr p c (CALL s args) = transCall p c (CALL s args)
-transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented"
+transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented" -- could be implemented as a function?
+transExpr p c (BLOGParse.CASE e1 (MAPCONSTRUCT ess)) = "case " ++ transExpr p c e1 ++ " of {" ++ mapify ess ++ "}"
+  where mapify = (intercalate "; ". (Prelude.map (\(e1,e2) -> (transExpr p c e1) ++ " -> " ++ (transExpr p c e2))))
 transExpr p c (COMPREHENSION [e'] args e) = "["++(transExpr p (argContext args `union` c) e')++" | "++(intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args)++"]"
+transExpr p c (BLOGParse.LIST es) = "[" ++ intercalate ", " (Prelude.map (transExpr p c) es) ++ "]"
 transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "any id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "]"
 transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "all id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "]"
 transExpr p c e = error $ "I don't know how to translate " ++ show e
+  
 
 -- helper function of transExpr (creates type context for args)
 argContext :: [(Type,String)] -> Map String ([Type],Type)
