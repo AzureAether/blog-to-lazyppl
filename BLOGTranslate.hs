@@ -110,7 +110,7 @@ modelBody p = modelBody' p p
 -- translation is ad-hoc (pattern matching non-exhaustive)
 modelBody' :: Program -> Program -> [String]
 -- the query is handled by returnStmt
-modelBody' p (QRYSTMT e : p')                  = modelBody' p p'
+modelBody' p (QRYSTMT e : p') = modelBody' p p'
 
 -- evidence statements are handled by returnStmt
 modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = (" ++ (transExpr p (context p) e1) ++ ") == (" ++ (transExpr p (context p) e2) ++ ")") : modelBody' p p' 
@@ -193,8 +193,11 @@ isRand (IFELSE e1 e2 e3) = isRand e1 || isRand e2 || isRand e3
 isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
-returnStmt p = ["return $ if "++observations++" then Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))++" else Nothing"]
-  where observations = intercalate " && " ["obs"++show n | n <- [1..obsCount p]]
+returnStmt p = [if obsCount p == 0
+                then "return " ++ returnValue
+                else "return $ if "++observations++" then " ++ returnValue ++" else Nothing"]
+  where returnValue  = "Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))
+        observations = intercalate " && " ["obs"++show n | n <- [1..obsCount p]]
 
 userTypeInits :: Program -> [String]
 userTypeInits p = if ts == [] 
