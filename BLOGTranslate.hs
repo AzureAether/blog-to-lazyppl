@@ -109,24 +109,25 @@ modelBody p = modelBody' p p
 -- keeps a copy of the whole program for reference (first arg)
 -- translation is ad-hoc (pattern matching non-exhaustive)
 modelBody' :: Program -> Program -> [String]
--- the query is handled by returnStmt
+-- queries are not considered part of the model body, and are placed at the end (see returnStmt)
 modelBody' p (QRYSTMT e : p') = modelBody' p p'
 
--- evidence statements are handled by returnStmt
+-- observation statements
 modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = (" ++ (transExpr p (context p) e1) ++ ") == (" ++ (transExpr p (context p) e2) ++ ")") : modelBody' p p' 
 
--- nullary random functions (where RHS is built-in distribution)
-modelBody' p (DECSTMT (RFUDECL (SIMPLETYPE "Real") s [] (CALL "UnivarGaussian" [arg1,arg2])) : p') = (s++" <- normal ("++(transExpr p (context p) arg1)++") ("++(transExpr p (context p) arg2)++")"):modelBody' p p'
+-- nullary random functions (which can be sampled right away)
+modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = ("v"++s++" <- "++(transExpr p (context p) e)) : modelBody' p p'
 
--- nullary random functions (where RHS is general)
-modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
-                                               then error "can only translate built-in distributions"
-                                               else ("let "++s++" = "++(transExpr p (context p) e)) : modelBody' p p'
-
--- random functions on arguments
-modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let "++s++(unwords (Prelude.map snd args)) ++ " = " ++ (transExpr p (context p) e)) : modelBody' p p'
-
+-- random functions on arguments (which can be sampled right away using memoization)
 modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p (context p) e))++")"):modelBody' p p'
+
+-- nullary fixed functions
+modelBody' p (DECSTMT (FFUDECL t s [] e) : p') = ("let v"++s++" = " ++ (transExpr p (context p) e)) : modelBody' p p'
+
+-- fixed functions on arguments
+modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++(unwords (Prelude.map snd args)) ++ " = " ++ (transExpr p (context p) e)) : modelBody' p p'
+
+-- other lines are not considered part of the model body and are passed over
 modelBody' p (stmt:p') = modelBody' p p'
 modelBody' p [] = []
 
@@ -141,56 +142,6 @@ obsCount :: Program -> Int
 obsCount [] = 0
 obsCount (EVDSTMT (e1,e2):p') = 1 + obsCount p'
 obsCount (stmt:p) = obsCount p
-
--- detects whether the translation of the expression will require random sampling
-isRand :: Expr -> Bool
-isRand (CALL "UnivarGaussian" _)   = True
-isRand (CALL "Bernoulli" _)        = True
-isRand (CALL "Beta" _)             = True
-isRand (CALL "Binomial" _)         = True
-isRand (CALL "BooleanDistrib" _)   = True
-isRand (CALL "Dirichlet" _)        = True
-isRand (CALL "Discrete" _)         = True
-isRand (CALL "Exponential" _)      = True
-isRand (CALL "Gamma" _)            = True
-isRand (CALL "Gaussian" _)         = True
-isRand (CALL "Geometric" _)        = True
-isRand (CALL "Laplace" _)          = True
-isRand (CALL "Multinomial" _)      = True
-isRand (CALL "MultivarGaussian" _) = True
-isRand (CALL "NegativeBinomial" _) = True
-isRand (CALL "Poisson" _)          = True
-isRand (CALL "UniformChoice" _)    = True
-isRand (CALL "UniformInt" _)       = True
-isRand (CALL "UniformReal" _)      = True
-isRand (CALL "UniformVector" _)    = True
-isRand (INT _)    = False
-isRand (STRING _) = False
-isRand (CHAR _)   = False
-isRand (DOUBLE _) = False
-isRand (BOOL _)   = False
-isRand (BLOGParse.ID _) = False
-isRand (BLOGParse.PLUS e1 e2)  = isRand e1 || isRand e2
-isRand (BLOGParse.MINUS e1 e2) = isRand e1 || isRand e2
-isRand (BLOGParse.MULT e1 e2)  = isRand e1 || isRand e2
-isRand (BLOGParse.DIV e1 e2)   = isRand e1 || isRand e2
-isRand (BLOGParse.MOD e1 e2)   = isRand e1 || isRand e2
-isRand (BLOGParse.POWER e1 e2) = isRand e1 || isRand e2
-isRand (BLOGParse.LT e1 e2)    = isRand e1 || isRand e2
-isRand (BLOGParse.GT e1 e2)    = isRand e1 || isRand e2
-isRand (BLOGParse.LEQ e1 e2)   = isRand e1 || isRand e2
-isRand (BLOGParse.GEQ e1 e2)   = isRand e1 || isRand e2
-isRand (BLOGParse.EQEQ e1 e2)  = isRand e1 || isRand e2
-isRand (BLOGParse.NEQ e1 e2)   = isRand e1 || isRand e2
-isRand (BLOGParse.AND e1 e2)   = isRand e1 || isRand e2
-isRand (BLOGParse.OR e1 e2)    = isRand e1 || isRand e2
-isRand (IMPLIES e1 e2) = isRand e1 || isRand e2
-isRand (APPLY e1 e2)   = isRand e1 || isRand e2
-isRand (NEG e) = isRand e
-isRand (BLOGParse.NOT e) = isRand e
-isRand (BLOGParse.AT e)  = isRand e --not sure what this means
-isRand (IFELSE e1 e2 e3) = isRand e1 || isRand e2 || isRand e3
-isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
 returnStmt p = [if obsCount p == 0
@@ -338,8 +289,6 @@ originVar ((ofu,arg):os) s = if (ofu == s) then arg else originVar os s
 -- translates a BLOG expression into a Haskell one
 -- source program -> program's type context -> expression to translate -> output
 transExpr :: Program -> Map String ([Type],Type) -> Expr -> String
-transExpr p c (CALL "Poisson" [n]) = "poisson " ++ transExpr p c n
--- other BLOG inbuilt distributions go here.
 transExpr p c (INT n)    = show (n :: Int)
 transExpr p c (STRING s) = show s
 transExpr p c (DOUBLE n) = show (n :: Double)
@@ -391,17 +340,19 @@ transCall p c (CALL "UniformChoice" [e]) = "uniformChoice ("++(transExpr p c e)+
 transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return "++e1'++" + i*(("++e2'++") - ("++e1'++"))}"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
+transCall p c (CALL "Poisson" [e]) = "poisson " ++ transExpr p c e
+transCall p c (CALL "BooleanDistrib" [e]) = "bernoulli " ++ transExpr p c e
 transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
                                Nothing -> s -- lambda-bound argument
-                               Just ([],SIMPLETYPE "Bool") -> s
-                               Just ([],SIMPLETYPE "Real") -> s
-                               Just ([],SIMPLETYPE userType) -> s
+                               Just ([],SIMPLETYPE "Boolean") -> "v"++s
+                               Just ([],SIMPLETYPE "Real")    -> "v"++s
+                               Just ([],SIMPLETYPE userType)  -> "v"++s
                                Just ([], t)   -> error $ "transCall error #1"
                                Just (args, t) -> error $ "transCall error #2"
 transCall p c (CALL "size" [e]) = "length "++(transExpr p c e)
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
-                               Just ([],SIMPLETYPE t') ->  s ++ " !! " ++  "???" ++ " + " ++ (transExpr p c e)
+                               Just ([],SIMPLETYPE t') ->  s ++ " !! " ++ "???" ++ " + " ++ (transExpr p c e)
                                Just ((arg:args),t) -> "f"++ s ++ " (" ++ transExpr p c e ++ ")"
                                _ -> error $ "cannot call (" ++ (show s) ++ ") as a function"
 
@@ -451,9 +402,11 @@ queries [] = []
 queryTypes :: Program -> [String]
 queryTypes p = Prelude.map (typeString.(\e -> snd $ typeIt e (context p))) (queries p)
 
--- translates an AST type into Haskell
+-- translates a BLOG type into a Haskell one
 typeString :: Type -> String
-typeString (SIMPLETYPE x) = if x == "Real" then "Double" else x
+typeString (SIMPLETYPE "Real")    = "Double"
+typeString (SIMPLETYPE "Boolean") = "Bool"
+typeString (SIMPLETYPE x)         = x
 typeString t = error "cannot translate type "++(show t)
 
 -- infers the type of an expression (in a context)
