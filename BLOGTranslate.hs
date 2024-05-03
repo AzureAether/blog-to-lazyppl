@@ -194,9 +194,10 @@ isRand (CALL _ args) = False --not sure on this one
 
 returnStmt :: Program -> [String]
 returnStmt p = [if obsCount p == 0
-                then "return " ++ returnValue
+                then "return $ " ++ returnValue
                 else "return $ if "++observations++" then " ++ returnValue ++" else Nothing"]
-  where returnValue  = "Just " ++ tuplefy (Prelude.map (transExpr p $ context p) (queries p))
+  where returnValue  = "Just " ++ if length (queries p) == 1 then "("++returnTuple++")" else returnTuple
+        returnTuple = tuplefy (Prelude.map (transExpr p $ context p) (queries p))
         observations = intercalate " && " ["obs"++show n | n <- [1..obsCount p]]
 
 userTypeInits :: Program -> [String]
@@ -508,10 +509,9 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "-- loop to yield data points",
               "let (answers,rejections) = (rejectionSampler 10000) $ runProb (sequence (repeat model)) tree\n",
               "let consistentWorlds = 10000 / (fromIntegral (10000 + rejections))",
-              "let worlds = length (distribution answers)",
               "putStrLn \"======  LW Trial Stats  ======\"",
-              "putStrLn $ \"Log of average likelihood weight (this trial): \" ++ show (log $ 1 / fromIntegral worlds)",
-              "putStrLn $ \"Average likelihood weight (this trial): \"        ++ show (1 / fromIntegral worlds)",
+              "putStrLn $ \"Log of average likelihood weight (this trial): \" ++ \"???\"",
+              "putStrLn $ \"Average likelihood weight (this trial): \"        ++ \"???\"",
               "putStrLn $ \"Fraction of consistent worlds (this trial): \"    ++ show consistentWorlds",
               "putStrLn $ \"Fraction of consistent worlds (running avg, all trials): \" ++ show consistentWorlds",
               "putStrLn \"======== Query Results ========\"",
