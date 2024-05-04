@@ -1,5 +1,5 @@
 {
-module BLOGParse (parser, Program(..), Statement(..), Declaration(..), Expr(..), Type(..)) where
+module BLOGParse (parser, Program(..), Statement(..), Declaration(..), Expr(..), Type(..), main) where
 import BLOGLex (lexer, Token(..))
 import Prelude hiding (GT, LT, EQ)  -- clashes with Token type
 }
@@ -329,7 +329,7 @@ pretty :: Program -> String
 pretty = (concat . map ((++";\n").show))
 
 -- Main method for testing
-main fp = readFile fp >>= putStr.pretty.parser.lexer
+main = do {fp <- getLine; s <- readFile fp; (putStr.pretty.parser.lexer) s}
 
 type Program = [Statement]
 

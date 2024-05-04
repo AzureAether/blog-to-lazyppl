@@ -116,7 +116,10 @@ modelBody' p (QRYSTMT e : p') = modelBody' p p'
 modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = (" ++ (transExpr p (context p) e1) ++ ") == (" ++ (transExpr p (context p) e2) ++ ")") : modelBody' p p' 
 
 -- nullary random functions (which can be sampled right away)
-modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = ("v"++s++" <- "++(transExpr p (context p) e)) : modelBody' p p'
+modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
+                                               then ("v"++s++" <- "++(e'))  : modelBody' p p'
+                                               else ("let v"++s++" = "++e') : modelBody' p p'
+                                           where e' = transExpr p (context p) e
 
 -- random functions on arguments (which can be sampled right away using memoization)
 modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p (context p) e))++")"):modelBody' p p'
@@ -125,11 +128,24 @@ modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize
 modelBody' p (DECSTMT (FFUDECL t s [] e) : p') = ("let v"++s++" = " ++ (transExpr p (context p) e)) : modelBody' p p'
 
 -- fixed functions on arguments
-modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++(unwords (Prelude.map snd args)) ++ " = " ++ (transExpr p (context p) e)) : modelBody' p p'
+modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++" "++(unwords (Prelude.map snd args)) ++ " = " ++ (transExpr p (context p) e)) : modelBody' p p'
 
 -- other lines are not considered part of the model body and are passed over
 modelBody' p (stmt:p') = modelBody' p p'
 modelBody' p [] = []
+
+-- detects whether an expression requires random sampling to evaluate
+-- (IE whether it should be translated as a Prob or not)
+isRand :: Expr -> Bool
+isRand (CALL "UnivarGaussian" _) = True
+isRand (CALL "UniformInt" _) = True
+isRand (CALL "BooleanDistrib" _) = True
+isRand (CALL "UniformReal" _) = True
+isRand (CALL "Categorical" _) = True
+isRand (CALL "abs" [e]) = False
+isRand (CALL "exp" [e]) = False
+isRand (IFELSE e1 e2 e3) = isRand e2
+isRand (CALL s []) = False -- assume this is a variable or user-defined constant
 
 -- helper function of modelBody'
 obsNum :: Program -> Statement -> Int
@@ -311,7 +327,7 @@ transExpr p c (BLOGParse.AND   e1 e2) = op p c "&&" e1 e2
 transExpr p c (BLOGParse.OR    e1 e2) = op p c "||" e1 e2
 transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- will confuse people; CLARIFY!
 transExpr p c (BLOGParse.APPLY e1 e2) = error "APPLY not implemented"
-transExpr p c (BLOGParse.NEG e) = "(*-1) $ " ++ transExpr p c e
+transExpr p c (BLOGParse.NEG e) = "(-" ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.NOT e) = "not $ " ++ transExpr p c e
 transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translator (timesteps not implemented)"
 transExpr p c (IFELSE e1 e2 e3) = "if "++(transExpr p c e1)++" then "++(transExpr p c e2)++" else "++(transExpr p c e3)
@@ -341,11 +357,18 @@ transCall :: Program -> Map String ([Type],Type) -> Expr -> String
 transCall p c (CALL "abs" [e]) = "abs (" ++ (transExpr p c e) ++ ")"
 transCall p c (CALL "UnivarGaussian" [e1,e2]) = "normal ("++(transExpr p c e1)++") ("++(transExpr p c e2)++")"
 transCall p c (CALL "UniformChoice" [e]) = "uniformChoice ("++(transExpr p c e)++")"
-transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return "++e1'++" + i*(("++e2'++") - ("++e1'++"))}"
+transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return $ "++e1'++" + i*(("++e2'++") - ("++e1'++"))}"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
+transCall p c (CALL "UniformInt" [e1,e2]) = "do {i <- uniformdiscrete (("++e2'++")-("++e1'++")); return $ i+("++e1'++")}"
+  where e1' = transExpr p c e1
+        e2' = transExpr p c e2
+transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices not implemented"
 transCall p c (CALL "Poisson" [e]) = "poisson " ++ transExpr p c e
 transCall p c (CALL "BooleanDistrib" [e]) = "bernoulli " ++ transExpr p c e
+transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++"!! i}"
+  where probs = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.snd) ess) ++ "]"
+        vals  = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.fst) ess) ++ "]"
 transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
                                Nothing -> s -- lambda-bound argument
                                Just ([],SIMPLETYPE "Boolean") -> "v"++s
@@ -354,6 +377,9 @@ transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
                                Just ([], t)   -> error $ "transCall error #1"
                                Just (args, t) -> error $ "transCall error #2"
 transCall p c (CALL "size" [e]) = "length "++(transExpr p c e)
+transCall p c (CALL "exp" [e]) = "exp "++if typeIt e c == ([],SIMPLETYPE "Integer") 
+                                         then "(fromIntegral "++(transExpr p c e)++")"
+                                         else (transExpr p c e)
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
                                Just ([],SIMPLETYPE t') ->  s ++ " !! " ++ "???" ++ " + " ++ (transExpr p c e)
@@ -410,6 +436,7 @@ queryTypes p = Prelude.map (typeString.(\e -> snd $ typeIt e (context p))) (quer
 typeString :: Type -> String
 typeString (SIMPLETYPE "Real")    = "Double"
 typeString (SIMPLETYPE "Boolean") = "Bool"
+typeString (SIMPLETYPE "Integer") = "Int"
 typeString (SIMPLETYPE x)         = x
 typeString t = error "cannot translate type "++(show t)
 
