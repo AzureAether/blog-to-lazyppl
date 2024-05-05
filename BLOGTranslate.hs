@@ -122,13 +122,18 @@ modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
                                            where e' = transExpr p (context p) e
 
 -- random functions on arguments (which can be sampled right away using memoization)
-modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p (context p) e))++")"):modelBody' p p'
+modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p c' e))++")"):modelBody' p p'
+  where c' = Prelude.foldr addToContext (context p) args
+        addToContext (t,s) c = insert s ([],t) c
 
 -- nullary fixed functions
-modelBody' p (DECSTMT (FFUDECL t s [] e) : p') = ("let v"++s++" = " ++ (transExpr p (context p) e)) : modelBody' p p'
+modelBody' p (DECSTMT (FFUDECL t s [] e) : p') = ("let f"++s++" = " ++ (transExpr p (context p) e)) : modelBody' p p'
 
 -- fixed functions on arguments
-modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++" "++(unwords (Prelude.map snd args)) ++ " = " ++ (transExpr p (context p) e)) : modelBody' p p'
+modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++" "++(unwords (Prelude.map (("v"++).snd) args)) ++ " = " ++ (transExpr p c' e)) : modelBody' p p'
+  where c' = Prelude.foldr addToContext (context p) args
+        addToContext (t,s) c = insert s ([],t) c
+  
 
 -- other lines are not considered part of the model body and are passed over
 modelBody' p (stmt:p') = modelBody' p p'
@@ -137,15 +142,24 @@ modelBody' p [] = []
 -- detects whether an expression requires random sampling to evaluate
 -- (IE whether it should be translated as a Prob or not)
 isRand :: Expr -> Bool
+isRand (INT n)    = False
+isRand (STRING s) = False
+isRand (DOUBLE n) = False
+isRand (BOOL n)   = False
+isRand BLOGParse.NULL = False
+isRand (BLOGParse.ID s) = False
 isRand (CALL "UnivarGaussian" _) = True
 isRand (CALL "UniformInt" _) = True
 isRand (CALL "BooleanDistrib" _) = True
 isRand (CALL "UniformReal" _) = True
 isRand (CALL "Categorical" _) = True
-isRand (CALL "abs" [e]) = False
-isRand (CALL "exp" [e]) = False
+isRand (CALL "abs" _) = False
+isRand (CALL "exp" _) = False
+isRand (CALL "sin" _) = False
 isRand (IFELSE e1 e2 e3) = isRand e2
+isRand (BLOGParse.CASE e1 (MAPCONSTRUCT ((e2,e3):ess))) = isRand e3
 isRand (CALL s []) = False -- assume this is a variable or user-defined constant
+isRand (CALL s es) = False -- assume this is a fixed user-defined function (NOT ALWAYS TRUE)
 
 -- helper function of modelBody'
 obsNum :: Program -> Statement -> Int
@@ -310,13 +324,15 @@ transExpr p c (STRING s) = show s
 transExpr p c (DOUBLE n) = show (n :: Double)
 transExpr p c (BOOL n)   = show (n :: Bool)
 transExpr p c BLOGParse.NULL = "Nothing" -- corresponds to a null origin 
-transExpr p c (BLOGParse.ID s) = s
+transExpr p c (BLOGParse.ID s) = "v"++s
 transExpr p c (BLOGParse.PLUS  e1 e2) = op p c "+" e1 e2
 transExpr p c (BLOGParse.MINUS e1 e2) = op p c "-" e1 e2
 transExpr p c (BLOGParse.MULT  e1 e2) = op p c "*" e1 e2
 transExpr p c (BLOGParse.DIV   e1 e2) = op p c "/" e1 e2
 transExpr p c (BLOGParse.MOD   e1 e2) = op p c "`mod`" e1 e2 -- will cause type issues; FIX!
-transExpr p c (BLOGParse.POWER e1 e2) = op p c "^" e1 e2     -- may cause type issues; INVESTIGATE!
+transExpr p c (BLOGParse.POWER e1 e2) = if typeIt e1 c == ([],SIMPLETYPE "Integer")
+                                        then op p c "^" e1 e2
+                                        else op p c "**" e1 e2
 transExpr p c (BLOGParse.LT    e1 e2) = op p c "<" e1 e2
 transExpr p c (BLOGParse.GT    e1 e2) = op p c ">" e1 e2
 transExpr p c (BLOGParse.LEQ   e1 e2) = op p c "<=" e1 e2
@@ -328,18 +344,18 @@ transExpr p c (BLOGParse.OR    e1 e2) = op p c "||" e1 e2
 transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- will confuse people; CLARIFY!
 transExpr p c (BLOGParse.APPLY e1 e2) = error "APPLY not implemented"
 transExpr p c (BLOGParse.NEG e) = "(-" ++ transExpr p c e ++ ")"
-transExpr p c (BLOGParse.NOT e) = "not $ " ++ transExpr p c e
+transExpr p c (BLOGParse.NOT e) = "(not " ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translator (timesteps not implemented)"
-transExpr p c (IFELSE e1 e2 e3) = "if "++(transExpr p c e1)++" then "++(transExpr p c e2)++" else "++(transExpr p c e3)
-transExpr p c (IFTHEN _ _) = error "IFTHEN may be deprecated syntax"
+transExpr p c (IFELSE e1 e2 e3) = "if "++transExpr p c e1++" then "++transExpr p c e2++" else "++transExpr p c e3
+transExpr p c (IFTHEN _ _) = error "IFTHEN is out-of-scope for this translator"
 transExpr p c (CALL s args) = transCall p c (CALL s args)
 transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented" -- could be implemented as a function?
 transExpr p c (BLOGParse.CASE e1 (MAPCONSTRUCT ess)) = "case " ++ transExpr p c e1 ++ " of {" ++ mapify ess ++ "}"
   where mapify = (intercalate "; ". (Prelude.map (\(e1,e2) -> (transExpr p c e1) ++ " -> " ++ (transExpr p c e2))))
 transExpr p c (COMPREHENSION [e'] args e) = "["++(transExpr p (argContext args `union` c) e')++" | "++(intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args)++"]"
 transExpr p c (BLOGParse.LIST es) = "[" ++ intercalate ", " (Prelude.map (transExpr p c) es) ++ "]"
-transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "any id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "]"
-transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "all id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "]"
+transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "(any id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
+transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "(all id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
 transExpr p c e = error $ "I don't know how to translate " ++ show e
   
 
@@ -349,14 +365,13 @@ argContext = fromList . (Prelude.map (\(t,s) -> (s,([],t))))
 
 -- helper function of transExpr (inserts operator between expressions)
 op :: Program -> Map String ([Type],Type) -> String -> Expr -> Expr -> String
-op p c s e1 e2 = "(" ++ transExpr p c e1 ++ ") "++s++" (" ++ transExpr p c e2 ++ ")"
+op p c s e1 e2 = "(" ++ transExpr p c e1 ++" "++s++" "++ transExpr p c e2 ++ ")"
 
 -- translates a BLOG function call into a Haskell one
 -- (note BLOG models variables as 0-ary functions)
 transCall :: Program -> Map String ([Type],Type) -> Expr -> String
-transCall p c (CALL "abs" [e]) = "abs (" ++ (transExpr p c e) ++ ")"
-transCall p c (CALL "UnivarGaussian" [e1,e2]) = "normal ("++(transExpr p c e1)++") ("++(transExpr p c e2)++")"
-transCall p c (CALL "UniformChoice" [e]) = "uniformChoice ("++(transExpr p c e)++")"
+transCall p c (CALL "UnivarGaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
+transCall p c (CALL "UniformChoice" [e]) = "(uniformChoice "++transExpr p c e++")"
 transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return $ "++e1'++" + i*(("++e2'++") - ("++e1'++"))}"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
@@ -364,29 +379,34 @@ transCall p c (CALL "UniformInt" [e1,e2]) = "do {i <- uniformdiscrete (("++e2'++
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
 transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices not implemented"
-transCall p c (CALL "Poisson" [e]) = "poisson " ++ transExpr p c e
-transCall p c (CALL "BooleanDistrib" [e]) = "bernoulli " ++ transExpr p c e
-transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++"!! i}"
+transCall p c (CALL "Poisson" [e]) = "(poisson " ++ transExpr p c e ++ ")"
+transCall p c (CALL "BooleanDistrib" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
+transCall p c (CALL "Bernoulli" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
+transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++" !! i}"
   where probs = "[" ++ (intercalate ", " $ Prelude.map (normalise.transExpr p c.snd) ess) ++ "]"
         vals  = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.fst) ess) ++ "]"
         normalise x = "("++x++")/"++totalWeight
         totalWeight = "("++(intercalate " + " $ Prelude.map (transExpr p c.snd) ess)++")"
 transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
-                               Nothing -> s -- lambda-bound argument
+                               Nothing -> "v"++s -- lambda-bound argument
                                Just ([],SIMPLETYPE "Boolean") -> "v"++s
                                Just ([],SIMPLETYPE "Real")    -> "v"++s
                                Just ([],SIMPLETYPE userType)  -> "v"++s
                                Just ([], t)   -> error $ "transCall error #1"
                                Just (args, t) -> error $ "transCall error #2"
-transCall p c (CALL "size" [e]) = "length "++(transExpr p c e)
-transCall p c (CALL "exp" [e]) = "exp "++if typeIt e c == ([],SIMPLETYPE "Integer") 
-                                         then "(fromIntegral "++(transExpr p c e)++")"
-                                         else (transExpr p c e)
+transCall p c (CALL "size"  [e]) = "(length "++transExpr p c e++")"
+transCall p c (CALL "round" [e]) = "(round " ++transExpr p c e++")"
+transCall p c (CALL "sin"   [e]) = "(sin "   ++transExpr p c e++")"
+transCall p c (CALL "abs"   [e]) = "(abs "   ++transExpr p c e++")"
+transCall p c (CALL "exp"   [e]) = "(exp "   ++if typeIt e c == ([],SIMPLETYPE "Integer") 
+                                               then "(fromIntegral "++transExpr p c e++")"
+                                               else (transExpr p c e)++")"
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
                                Just ([],SIMPLETYPE t') ->  s ++ " !! " ++ "???" ++ " + " ++ (transExpr p c e)
                                Just ((arg:args),t) -> "f"++ s ++ " (" ++ transExpr p c e ++ ")"
                                _ -> error $ "cannot call (" ++ (show s) ++ ") as a function"
+transCall p c (CALL s es) = "(f"++s++" "++unwords (Prelude.map (transExpr p c) es)++")"
 
 -- retrieves the number statements of a user-defined type
 numberStmts :: Program -> String -> [Statement]
@@ -445,12 +465,13 @@ typeString t = error "cannot translate type "++(show t)
 -- infers the type of an expression (in a context)
 -- assumes the source file type-checks correctly
 typeIt :: Expr -> Map String ([Type],Type) -> ([Type],Type)
-typeIt (INT n) _       = ([],SIMPLETYPE "Int")
+typeIt (INT n) _       = ([],SIMPLETYPE "Integer")
 typeIt (STRING s) _    = ([],SIMPLETYPE "String")
 typeIt (CHAR c) _      = ([],SIMPLETYPE "Char")
 typeIt (DOUBLE n) _    = ([],SIMPLETYPE "Double")
-typeIt (BOOL b) _      = ([],SIMPLETYPE "Bool")
-typeIt BLOGParse.NULL _          = error "why am I type checking null?"
+typeIt (BOOL b) _      = ([],SIMPLETYPE "Boolean")
+typeIt BLOGParse.NULL _  = error "why am I type checking null?"
+typeIt (CALL "round" _) _  = ([],SIMPLETYPE "Integer")
 typeIt (BLOGParse.ID s) m        = let (Just t) = Data.Map.lookup s m in t 
 typeIt (BLOGParse.PLUS e1 e2) m  = typeIt e1 m
 typeIt (BLOGParse.MINUS e1 e2) m = typeIt e1 m
@@ -458,18 +479,18 @@ typeIt (BLOGParse.MULT e1 e2) m  = typeIt e1 m
 typeIt (BLOGParse.DIV e1 e2) m   = typeIt e1 m
 typeIt (BLOGParse.MOD e1 e2) m   = typeIt e1 m
 typeIt (BLOGParse.POWER e1 e2) _  = ([],SIMPLETYPE "Double")
-typeIt (BLOGParse.LT e1 e2) _     = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.GT e1 e2) _     = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.LEQ e1 e2) _    = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.GEQ e1 e2) _    = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.EQEQ e1 e2) _   = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.NEQ e1 e2) _    = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.AND e1 e2) _    = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.OR e1 e2) _     = ([],SIMPLETYPE "Bool")
-typeIt (IMPLIES e1 e2) _ = ([],SIMPLETYPE "Bool")
+typeIt (BLOGParse.LT e1 e2) _     = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.GT e1 e2) _     = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.LEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.GEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.EQEQ e1 e2) _   = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.NEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.AND e1 e2) _    = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.OR e1 e2) _     = ([],SIMPLETYPE "Boolean")
+typeIt (IMPLIES e1 e2) _ = ([],SIMPLETYPE "Boolean")
 typeIt (APPLY e1 e2) _  = error "what's an apply?"
 typeIt (NEG e1) m       = typeIt e1 m
-typeIt (BLOGParse.NOT e1) _      = ([],SIMPLETYPE "Bool")
+typeIt (BLOGParse.NOT e1) _      = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.AT e1) _       = error "I can't type an @ statement"
 typeIt (IFELSE e1 e2 e3) m = if ((typeIt e2 m) == (typeIt e3 m)) then typeIt e2 m else error "IfElse type error"
 typeIt (IFTHEN e1 e2) _  = error "How can an if-then have no else?"
@@ -479,8 +500,8 @@ typeIt (CALL s es) m     = let l = Data.Map.lookup s m in
                            else let (Just (argTypes, returnType)) = l in ([],returnType)
 typeIt (MAPCONSTRUCT e1e2s) _   = error "Not sure how to do maps...?"
 typeIt (COMPREHENSION es tss e) _ = error "How to do comprehensions??"
-typeIt (BLOGParse.EXISTS t s e) _ = ([],SIMPLETYPE "Bool")
-typeIt (BLOGParse.FORALL t s e) _ = ([],SIMPLETYPE "Bool")
+typeIt (BLOGParse.EXISTS t s e) _ = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.FORALL t s e) _ = ([],SIMPLETYPE "Boolean")
 
 -- main method (not quite finished)
 mainPart :: Program -> [String]
