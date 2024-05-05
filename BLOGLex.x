@@ -65,6 +65,7 @@ tokens :-
   \!\=                           { \s -> NEQ }
   \<                             { \s -> BLOGLex.LT }
   \>                             { \s -> BLOGLex.GT }
+  \!                             { \s -> NOT }
   \<\=                           { \s -> LEQ }
   \>\=                           { \s -> GEQ }
   \&                             { \s -> AND }

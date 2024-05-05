@@ -371,24 +371,34 @@ op p c s e1 e2 = "(" ++ transExpr p c e1 ++" "++s++" "++ transExpr p c e2 ++ ")"
 -- translates a BLOG function call into a Haskell one
 -- (note BLOG models variables as 0-ary functions)
 transCall :: Program -> Map String ([Type],Type) -> Expr -> String
-transCall p c (CALL "UnivarGaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
 transCall p c (CALL "UniformChoice" [e]) = "(uniformChoice "++transExpr p c e++")"
-transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return $ "++e1'++" + i*(("++e2'++") - ("++e1'++"))}"
+transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return $ "++e1'++" + i*("++e2'++" - "++e1'++")}"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
-transCall p c (CALL "UniformInt" [e1,e2]) = "do {i <- uniformdiscrete (("++e2'++")-("++e1'++")); return $ i+("++e1'++")}"
+transCall p c (CALL "UniformInt" [e1,e2]) = "do {i <- uniformdiscrete ("++e2'++" - "++e1'++"); return $ i + "++e1'++"}"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
-transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices not implemented"
+transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices are out-of-scope for this translator"
 transCall p c (CALL "Poisson" [e]) = "(poisson " ++ transExpr p c e ++ ")"
-transCall p c (CALL "BooleanDistrib" [e]) = "do {i <- bernoulli " ++ transExpr p c e ++ ";return $ i == 1)"
-transCall p c (CALL "Bernoulli" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
+transCall p c (CALL "BooleanDistrib" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
+transCall p c (CALL "Bernoulli" [e]) = "(categorical [" ++ transExpr p c e ++ ",1])"
 transCall p c (CALL "Geometric" [e]) = "let geometric = do {i <- LazyPPL.uniform;if i < "++transExpr p c e++" then 0 else 1 + geometric} in geometric"
 transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++" !! i}"
   where probs = "[" ++ (intercalate ", " $ Prelude.map (normalise.transExpr p c.snd) ess) ++ "]"
         vals  = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.fst) ess) ++ "]"
         normalise x = "("++x++")/"++totalWeight
         totalWeight = "("++(intercalate " + " $ Prelude.map (transExpr p c.snd) ess)++")"
+transCall p c (CALL "Beta" _) = error "Beta distribution not implemented"
+transCall p c (CALL "Binomial" _) = error "Binomial distribution not implemented"
+transCall p c (CALL "Exponential" _) = error "Exponential distribution not implemented"
+transCall p c (CALL "Gamma" _) = error "Gamma distribution not implemented"
+transCall p c (CALL "Gaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
+transCall p c (CALL "Laplace" _) = error "Laplace distribution not implemented"
+transCall p c (CALL "Dirichlet" _)        = error "Matrices are out-of-scope for this translator"
+transCall p c (CALL "Discrete" _)         = error "Matrices are out-of-scope for this translator"
+transCall p c (CALL "Multinomial" _)      = error "Matrices are out-of-scope for this translator"
+transCall p c (CALL "NegativeBinomial" _) = error "Matrices are out-of-scope for this translator"
+transCall p c (CALL "UniformVector" _)    = error "Matrices are out-of-scope for this translator"
 transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
                                Nothing -> "v"++s -- lambda-bound argument
                                Just ([],SIMPLETYPE "Boolean") -> "v"++s
@@ -442,7 +452,7 @@ context ((DECSTMT (DNTDECL s members)) : p) = (mapify s members) `union` (contex
 context ((DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t'))) : p) = insert s ([SIMPLETYPE t'],SIMPLETYPE t) (context p)
 context ((DECSTMT (DNTDECL t [])) : p) = context p
 context ((DECSTMT (DNTDECL t ((s,-1):mems))) : p) = insert s ([],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
-context ((DECSTMT (DNTDECL t ((s,_):mems)))  : p) = insert s ([SIMPLETYPE "Integer"],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
+context ((DECSTMT (DNTDECL t ((s,n):mems)))  : p) = insert s ([SIMPLETYPE "Integer"],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
 context (stmt : p) = context p
 
 -- helper function of context
@@ -531,8 +541,8 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "putStrLn \"======  LW Trial Stats  ======\"",
               "putStrLn $ \"Log of average likelihood weight (this trial): \" ++ \"???\"",
               "putStrLn $ \"Average likelihood weight (this trial): \"        ++ \"???\"",
-              "putStrLn $ \"Fraction of consistent worlds (this trial): \"    ++ show consistentWorlds",
-              "putStrLn $ \"Fraction of consistent worlds (running avg, all trials): \" ++ show consistentWorlds",
+              "putStrLn $ \"Fraction of consistent worlds (this trial): \"    ++ \"???\"",
+              "putStrLn $ \"Fraction of consistent worlds (running avg, all trials): \" ++ \"???\"",
               "putStrLn \"======== Query Results ========\"",
               "putStrLn \"Number of samples: 10000\""] ++
               results p ++
