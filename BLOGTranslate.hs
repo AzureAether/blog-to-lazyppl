@@ -323,6 +323,7 @@ transExpr p c (INT n)    = show (n :: Int)
 transExpr p c (STRING s) = show s
 transExpr p c (DOUBLE n) = show (n :: Double)
 transExpr p c (BOOL n)   = show (n :: Bool)
+transExpr p c (SET es)   = "["++intercalate ", " (Prelude.map (transExpr p c) es)++"]"
 transExpr p c BLOGParse.NULL = "Nothing" -- corresponds to a null origin 
 transExpr p c (BLOGParse.ID s) = "v"++s
 transExpr p c (BLOGParse.PLUS  e1 e2) = op p c "+" e1 e2
@@ -347,7 +348,7 @@ transExpr p c (BLOGParse.NEG e) = "(-" ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.NOT e) = "(not " ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translator (timesteps not implemented)"
 transExpr p c (IFELSE e1 e2 e3) = "if "++transExpr p c e1++" then "++transExpr p c e2++" else "++transExpr p c e3
-transExpr p c (IFTHEN _ _) = error "IFTHEN is out-of-scope for this translator"
+transExpr p c (IFTHEN _ _) = error "IFTHEN not implemented"
 transExpr p c (CALL s args) = transCall p c (CALL s args)
 transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented" -- could be implemented as a function?
 transExpr p c (BLOGParse.CASE e1 (MAPCONSTRUCT ess)) = "case " ++ transExpr p c e1 ++ " of {" ++ mapify ess ++ "}"
@@ -382,6 +383,7 @@ transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices not implemente
 transCall p c (CALL "Poisson" [e]) = "(poisson " ++ transExpr p c e ++ ")"
 transCall p c (CALL "BooleanDistrib" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
 transCall p c (CALL "Bernoulli" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
+transCall p c (CALL "Geometric" [e]) = "let geometric = do {i <- LazyPPL.uniform;if i < "++transExpr p c e++" then 0 else 1 + geometric} in geometric"
 transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++" !! i}"
   where probs = "[" ++ (intercalate ", " $ Prelude.map (normalise.transExpr p c.snd) ess) ++ "]"
         vals  = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.fst) ess) ++ "]"
@@ -397,7 +399,11 @@ transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
 transCall p c (CALL "size"  [e]) = "(length "++transExpr p c e++")"
 transCall p c (CALL "round" [e]) = "(round " ++transExpr p c e++")"
 transCall p c (CALL "sin"   [e]) = "(sin "   ++transExpr p c e++")"
+transCall p c (CALL "cos"   [e]) = "(cos "   ++transExpr p c e++")"
+transCall p c (CALL "tan"   [e]) = "(tan "   ++transExpr p c e++")"
 transCall p c (CALL "abs"   [e]) = "(abs "   ++transExpr p c e++")"
+transCall p c (CALL "min"   [e]) = "(minimum "   ++transExpr p c e++")"
+transCall p c (CALL "max"   [e]) = "(maximum "   ++transExpr p c e++")"
 transCall p c (CALL "exp"   [e]) = "(exp "   ++if typeIt e c == ([],SIMPLETYPE "Integer") 
                                                then "(fromIntegral "++transExpr p c e++")"
                                                else (transExpr p c e)++")"
@@ -488,12 +494,12 @@ typeIt (BLOGParse.NEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.AND e1 e2) _    = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.OR e1 e2) _     = ([],SIMPLETYPE "Boolean")
 typeIt (IMPLIES e1 e2) _ = ([],SIMPLETYPE "Boolean")
-typeIt (APPLY e1 e2) _  = error "what's an apply?"
+typeIt (APPLY e1 e2) _  = error "APPLY not implemented"
 typeIt (NEG e1) m       = typeIt e1 m
 typeIt (BLOGParse.NOT e1) _      = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.AT e1) _       = error "I can't type an @ statement"
 typeIt (IFELSE e1 e2 e3) m = if ((typeIt e2 m) == (typeIt e3 m)) then typeIt e2 m else error "IfElse type error"
-typeIt (IFTHEN e1 e2) _  = error "How can an if-then have no else?"
+typeIt (IFTHEN e1 e2) _  = error "IFTHEN not implemented"
 typeIt (CALL s es) m     = let l = Data.Map.lookup s m in 
                            if isNothing l
                            then error $ s++" not found" 

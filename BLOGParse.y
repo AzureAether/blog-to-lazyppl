@@ -292,11 +292,11 @@ list_expr :
     | LBRACKET comprehension_expr RBRACKET                    { $2 }
 
 set_expr :
-    explicit_set  { $1 }
+    explicit_set  { SET $1 }
     | tuple_set   { $1 }
 
 explicit_set :
-    LBRACE opt_expression_list RBRACE   { EXPPLACEHOLD }
+    LBRACE opt_expression_list RBRACE   { $2 }
 
 comprehension_expr :
     expression_list FOR type_var_lst opt_colon_expr   { COMPREHENSION $1 $3 $4 }
@@ -392,6 +392,7 @@ data Expr
     | IFTHEN Expr Expr
     | CALL String [Expr]
     | MAPCONSTRUCT [(Expr,Expr)]
+    | SET [Expr]
     | CASE Expr Expr
     | COMPREHENSION [Expr] [(Type,String)] Expr
     | LIST [Expr]
