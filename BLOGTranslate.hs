@@ -113,7 +113,7 @@ modelBody' :: Program -> Program -> [String]
 modelBody' p (QRYSTMT e : p') = modelBody' p p'
 
 -- observation statements
-modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = (" ++ (transExpr p (context p) e1) ++ ") == (" ++ (transExpr p (context p) e2) ++ ")") : modelBody' p p' 
+modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = " ++ (transExpr p (context p) e1) ++ " == " ++ (transExpr p (context p) e2)) : modelBody' p p' 
 
 -- nullary random functions (which can be sampled right away)
 modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
@@ -342,8 +342,8 @@ transExpr p c (BLOGParse.EQEQ  e1 e2) = op p c "==" e1 e2
 transExpr p c (BLOGParse.NEQ   e1 e2) = op p c "/=" e1 e2
 transExpr p c (BLOGParse.AND   e1 e2) = op p c "&&" e1 e2
 transExpr p c (BLOGParse.OR    e1 e2) = op p c "||" e1 e2
-transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- will confuse people; CLARIFY!
-transExpr p c (BLOGParse.APPLY e1 e2) = error "APPLY not implemented"
+transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- this is an anti-pun. (<=) :: Ord is "implies"
+transExpr p c (APPLY (CALL s []) (INT n)) = "(v"++s++" !! "++show n++")"
 transExpr p c (BLOGParse.NEG e) = "(-" ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.NOT e) = "(not " ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translator (timesteps not implemented)"
@@ -381,7 +381,7 @@ transCall p c (CALL "UniformInt" [e1,e2]) = "do {i <- uniformdiscrete (("++e2'++
         e2' = transExpr p c e2
 transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices not implemented"
 transCall p c (CALL "Poisson" [e]) = "(poisson " ++ transExpr p c e ++ ")"
-transCall p c (CALL "BooleanDistrib" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
+transCall p c (CALL "BooleanDistrib" [e]) = "do {i <- bernoulli " ++ transExpr p c e ++ ";return $ i == 1)"
 transCall p c (CALL "Bernoulli" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
 transCall p c (CALL "Geometric" [e]) = "let geometric = do {i <- LazyPPL.uniform;if i < "++transExpr p c e++" then 0 else 1 + geometric} in geometric"
 transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++" !! i}"
@@ -409,9 +409,8 @@ transCall p c (CALL "exp"   [e]) = "(exp "   ++if typeIt e c == ([],SIMPLETYPE "
                                                else (transExpr p c e)++")"
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
-                               Just ([],SIMPLETYPE t') ->  s ++ " !! " ++ "???" ++ " + " ++ (transExpr p c e)
-                               Just ((arg:args),t) -> "f"++ s ++ " (" ++ transExpr p c e ++ ")"
-                               _ -> error $ "cannot call (" ++ (show s) ++ ") as a function"
+                               Just ((arg:args),t) -> "(f"++ s ++ " " ++ transExpr p c e ++ ")"
+                               _ -> error $ "cannot call " ++ (show s) ++ " as a function"
 transCall p c (CALL s es) = "(f"++s++" "++unwords (Prelude.map (transExpr p c) es)++")"
 
 -- retrieves the number statements of a user-defined type
@@ -441,6 +440,9 @@ context ((DECSTMT (FFUDECL t s args e)) : p) = insert s (Prelude.map fst args,t)
 context ((DECSTMT (RFUDECL t s args e)) : p) = insert s (Prelude.map fst args,t) (context p)
 context ((DECSTMT (DNTDECL s members)) : p) = (mapify s members) `union` (context p)
 context ((DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t'))) : p) = insert s ([SIMPLETYPE t'],SIMPLETYPE t) (context p)
+context ((DECSTMT (DNTDECL t [])) : p) = context p
+context ((DECSTMT (DNTDECL t ((s,-1):mems))) : p) = insert s ([],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
+context ((DECSTMT (DNTDECL t ((s,_):mems)))  : p) = insert s ([SIMPLETYPE "Integer"],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
 context (stmt : p) = context p
 
 -- helper function of context
@@ -478,36 +480,40 @@ typeIt (DOUBLE n) _    = ([],SIMPLETYPE "Double")
 typeIt (BOOL b) _      = ([],SIMPLETYPE "Boolean")
 typeIt BLOGParse.NULL _  = error "why am I type checking null?"
 typeIt (CALL "round" _) _  = ([],SIMPLETYPE "Integer")
-typeIt (BLOGParse.ID s) m        = let (Just t) = Data.Map.lookup s m in t 
-typeIt (BLOGParse.PLUS e1 e2) m  = typeIt e1 m
-typeIt (BLOGParse.MINUS e1 e2) m = typeIt e1 m
-typeIt (BLOGParse.MULT e1 e2) m  = typeIt e1 m
-typeIt (BLOGParse.DIV e1 e2) m   = typeIt e1 m
-typeIt (BLOGParse.MOD e1 e2) m   = typeIt e1 m
-typeIt (BLOGParse.POWER e1 e2) _  = ([],SIMPLETYPE "Double")
-typeIt (BLOGParse.LT e1 e2) _     = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.GT e1 e2) _     = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.LEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.GEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.EQEQ e1 e2) _   = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.NEQ e1 e2) _    = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.AND e1 e2) _    = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.OR e1 e2) _     = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.ID s) c        = let (Just t) = Data.Map.lookup s c in t 
+typeIt (BLOGParse.PLUS e1 e2) c  = typeIt e1 c
+typeIt (BLOGParse.MINUS e1 e2) c = typeIt e1 c
+typeIt (BLOGParse.MULT e1 e2) c  = typeIt e1 c
+typeIt (BLOGParse.DIV e1 e2) c   = typeIt e1 c
+typeIt (BLOGParse.MOD e1 e2) c   = typeIt e1 c
+typeIt (BLOGParse.POWER e1 e2) _ = ([],SIMPLETYPE "Real")
+typeIt (BLOGParse.LT e1 e2) _    = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.GT e1 e2) _    = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.LEQ e1 e2) _   = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.GEQ e1 e2) _   = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.EQEQ e1 e2) _  = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.NEQ e1 e2) _   = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.AND e1 e2) _   = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.OR e1 e2) _    = ([],SIMPLETYPE "Boolean")
 typeIt (IMPLIES e1 e2) _ = ([],SIMPLETYPE "Boolean")
-typeIt (APPLY e1 e2) _  = error "APPLY not implemented"
+typeIt (APPLY (CALL s []) (INT n)) c  = let l = Data.Map.lookup s c in
+                                          if isNothing l 
+                                          then error $ "no user-declared value "++s
+                                          else let Just (_,t) = l in ([],t)
 typeIt (NEG e1) m       = typeIt e1 m
 typeIt (BLOGParse.NOT e1) _      = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.AT e1) _       = error "I can't type an @ statement"
-typeIt (IFELSE e1 e2 e3) m = if ((typeIt e2 m) == (typeIt e3 m)) then typeIt e2 m else error "IfElse type error"
+typeIt (BLOGParse.AT e1) _       = error "Timesteps are out-of-scope for this translator"
+typeIt (IFELSE e1 e2 e3) c = if ((typeIt e2 c) == (typeIt e3 c)) then typeIt e2 c else error "IfElse type error"
 typeIt (IFTHEN e1 e2) _  = error "IFTHEN not implemented"
-typeIt (CALL s es) m     = let l = Data.Map.lookup s m in 
-                           if isNothing l
-                           then error $ s++" not found" 
-                           else let (Just (argTypes, returnType)) = l in ([],returnType)
+typeIt (CALL s es) c     = let l = Data.Map.lookup s c in 
+                             if isNothing l
+                             then error $ s++" not found" 
+                             else let (Just (argTypes, returnType)) = l in ([],returnType)
 typeIt (MAPCONSTRUCT e1e2s) _   = error "Not sure how to do maps...?"
 typeIt (COMPREHENSION es tss e) _ = error "How to do comprehensions??"
 typeIt (BLOGParse.EXISTS t s e) _ = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.FORALL t s e) _ = ([],SIMPLETYPE "Boolean")
+typeIt x _ = error $ "I dont know how to type" ++ show x
 
 -- main method (not quite finished)
 mainPart :: Program -> [String]
