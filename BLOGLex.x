@@ -59,6 +59,7 @@ tokens :-
   \-                             { \s -> MINUS }
   \*                             { \s -> MULT }
   \/                             { \s -> DIV }
+  \%                             { \s -> MOD }
   \^                             { \s -> POWER }
   \=\=                           { \s -> EQEQ }
   \!\=                           { \s -> NEQ }
