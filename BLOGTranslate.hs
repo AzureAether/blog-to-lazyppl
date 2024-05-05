@@ -367,8 +367,10 @@ transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices not implemente
 transCall p c (CALL "Poisson" [e]) = "poisson " ++ transExpr p c e
 transCall p c (CALL "BooleanDistrib" [e]) = "bernoulli " ++ transExpr p c e
 transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++"!! i}"
-  where probs = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.snd) ess) ++ "]"
+  where probs = "[" ++ (intercalate ", " $ Prelude.map (normalise.transExpr p c.snd) ess) ++ "]"
         vals  = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.fst) ess) ++ "]"
+        normalise x = "("++x++")/"++totalWeight
+        totalWeight = "("++(intercalate " + " $ Prelude.map (transExpr p c.snd) ess)++")"
 transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
                                Nothing -> s -- lambda-bound argument
                                Just ([],SIMPLETYPE "Boolean") -> "v"++s
