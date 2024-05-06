@@ -12,7 +12,7 @@ The translator is composed of three functions:
 
 For example a typical GHCi command would be `(translator.parser.lexer) "random Real a ~ Gaussian(0, 10); query a"`
 
-The BLOGLex, BLOGParse and BLOGTranslate modules all expose a main method which expects the file path of a BLOG source file and returns a Haskell translation in raw text.
+The BLOGLex, BLOGParse and BLOGTranslate modules all expose a main method which expects the file path of a BLOG source file as input.
 
 Note that several grammatical features of BLOG are currently untranslated:
 - IF-THEN statements (as opposed to IF-THEN-ELSE statements)
