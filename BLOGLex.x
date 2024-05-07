@@ -96,8 +96,10 @@ data Token
 lexer :: String -> [Token]
 lexer = alexScanTokens
 
--- Main method for testing
+-- main method for testing
+main :: IO ()
 main = do
-  s <- getContents
-  print (alexScanTokens s)
+    filename <- getLine
+    string <- readFile filename
+    putStrLn $ (show.lexer) string
 }

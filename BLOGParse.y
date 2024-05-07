@@ -328,8 +328,12 @@ parseError _ = error "(parse errors aren't descriptive)"
 pretty :: Program -> String
 pretty = (concat . map ((++";\n").show))
 
--- Main method for testing
-main = do {fp <- getLine; s <- readFile fp; (putStr.pretty.parser.lexer) s}
+-- main method for testing
+main :: IO ()
+main = do
+    filename <- getLine
+    string <- readFile filename
+    putStrLn $ (show.parser.lexer) string
 
 type Program = [Statement]
 

@@ -570,12 +570,7 @@ footer p = ["-- EOF"]
 -- main method for testing
 main :: IO ()
 main = do
-    fileName <- getLine
-    string <- readFile ("example/"++fileName++".blog")
+    filename <- getLine
+    string <- readFile filename
     putStrLn $ (translator.parser.lexer) string
-
-debug :: IO ()
-debug = do
-    string <- readFile "example/aircraft-static.blog"
-    putStrLn $ (show $ ofus ((parser.lexer) string) "Blip")
     
