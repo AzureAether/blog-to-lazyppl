@@ -435,6 +435,7 @@ transCall p c (CALL "Binomial" _) = error "Binomial distribution not implemented
 transCall p c (CALL "Exponential" _) = error "Exponential distribution not implemented"
 transCall p c (CALL "Gamma" _) = error "Gamma distribution not implemented"
 transCall p c (CALL "Gaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
+transCall p c (CALL "UnivarGaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
 transCall p c (CALL "Laplace" _) = error "Laplace distribution not implemented"
 transCall p c (CALL "Dirichlet" _)        = error "Matrices are out-of-scope for this translator"
 transCall p c (CALL "Discrete" _)         = error "Matrices are out-of-scope for this translator"
@@ -504,9 +505,15 @@ mapify s ((name,count):xs) = insert name ([],(SIMPLETYPE s)) (mapify s xs)
 
 -- the expressions in query statements (in source file order)
 queries :: Program -> [Expr]
-queries ((QRYSTMT e) : xs) = e : (queries xs)
-queries (x:xs) = queries xs
+queries ((QRYSTMT e) : p) = e : (queries p)
+queries (stmt:p) = queries p
 queries [] = []
+
+-- the expressions in obs statements (in source file order)
+observations :: Program -> [(Expr,Expr)]
+observations ((EVDSTMT (e1,e2)):p) = (e1,e2) : observations p
+observations (stmt:p) = observations p
+observations [] = []
 
 -- the types of those queried expressions (in source file order)
 -- (assumes these expressions take no arguments)
@@ -570,10 +577,23 @@ typeIt x _ = error $ "I dont know how to type" ++ show x
 mainPart :: Program -> [String]
 mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "putStrLn \"Using a fixed random seed for repeatability.\"",
+              "putStrLn \"Constructing inference engine of type IO ()\"",
+              "putStrLn \"Constructing sampler of type Int -> [Maybe a] -> ([a],Int)\"",
               "putStrLn \"..............................................\"",
-              "putStrLn \"Evidence: [???]\"", -- EVIDENCE statements not implemented.
+              "putStrLn \"Evidence: "++(escapeQuotes $ (intercalate ", " $ Prelude.map showObs $ observations p))++"\"",
               "putStrLn \"Query: " ++ (escapeQuotes (show $ queries p)) ++ "\"",
               "putStrLn \"Running for 10000 samples...\"\n",
+              "putStrLn \"Query reporting interval is 1000\"",
+              "putStrLn \"Samples done: 1000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 2000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 3000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 4000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 5000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 6000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 7000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 8000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 9000.   Time elapsed: ??? s.\"",
+              "putStrLn \"Samples done: 10000.   Time elapsed: ??? s.\"",
               "-- establish random seed",
               "let tree = randomTree (mkStdGen 0)\n",
               "-- loop to yield data points",
@@ -588,6 +608,7 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "putStrLn \"Number of samples: 10000\""] ++
               results p ++
               ["putStrLn \"======== Done ========\""])
+  where showObs (e1,e2) = (show e1) ++ " = " ++ (show e2)
 
 results :: Program -> [String]
 results p = concat [[msg++(escapeQuotes $ show (queries p !! (q-1)))++"\"",
