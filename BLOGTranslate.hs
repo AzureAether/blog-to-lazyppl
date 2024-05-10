@@ -122,10 +122,11 @@ modelBody' p (EVDSTMT (e1,e2) : p') = ("let "++obsString++" = " ++ lhs ++ " == "
         rhs = transExpr p (context p) e2
 
 -- nullary random functions (random variables)
-modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
-                                               then ("v"++s++" <- "++e')    : modelBody' p p'
-                                               else ("let v"++s++" = "++e') : modelBody' p p'
-                                           where e' = transExpr p (context p) e
+modelBody' p (DECSTMT (RFUDECL _ s [] e):p') =
+    if isRand e
+    then ("v"++s++" <- "++e')    : modelBody' p p'
+    else ("let v"++s++" = "++e') : modelBody' p p'
+  where e' = transExpr p (context p) e
 
 -- random functions on arguments (which can be sampled right away using memoization)
 modelBody' p (DECSTMT (RFUDECL t s args e) : p') = ("f"++s++" <- "++lambdaFunc) : modelBody' p p'
