@@ -9,7 +9,8 @@ import Data.Maybe
 -- translates BLOG program to LazyPPL code
 -- last part of the translator.parser.lexer pipeline
 translator :: Program -> String
-translator p = unlines $ Prelude.map (\x -> unlines $ x p) [header, helpers, userTypes, userOrigins, model, mainPart, footer]
+translator p = unlines $ Prelude.map (\x -> unlines $ x p)
+     [header, helpers, userTypes, userOrigins, model, mainPart, footer]
 
 -- the header features the readme comment and imports
 header :: Program -> [String]
@@ -33,17 +34,19 @@ userTypes p = if (types p == [])
 -- (keeps a copy of the whole program around)
 userOrigins' :: Program -> Program -> [String]
 userOrigins' p [] = []
-userOrigins' p (DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t')) : p') = typeSignature : def : userOrigins' p p'
-  where typeSignature = ("f"++s ++ " :: "++t'++" -> Maybe "++t)
-        def = "f"++s++" ("++t'++concat [if t'' == t then " x" else " _" | (SIMPLETYPE t'',s) <- ofus p t']++" i) = x"
+userOrigins' p (DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t')) : p') = signature : def : userOrigins' p p'
+  where signature = ("f"++s ++ " :: "++t'++" -> Maybe "++t)
+        def = "f"++s++" ("++t'++originFields++" i) = x"
+        originFields = concat [if t'' == t then " x" else " _" | (SIMPLETYPE t'',s) <- ofus p t']
 userOrigins' p (stmt:p') = userOrigins' p p'
 
 userOrigins p = userOrigins' p p
 
 -- Haskell declaration of a type
 declare :: Program -> String -> String
-declare p x = "data " ++ x ++ " = " ++ x ++ " " ++ (unwords $ Prelude.map f (ofus p x)) ++ "Int deriving (Show,Eq,Ord)"
+declare p x = "data " ++ x ++ " = " ++ x ++ " " ++ originTypes ++ "Int deriving (Show,Eq,Ord)"
   where f (SIMPLETYPE t,s) = "(Maybe "++t++") "
+        originTypes = (unwords $ Prelude.map f (ofus p x))
 
 -- the list of all user-defined types in the source program
 types :: Program -> [String]
@@ -61,35 +64,38 @@ ofus [] s = []
 
 -- find the (user-defined) type of an origin function
 typeOrigin :: Program -> String -> String
-typeOrigin (DECSTMT (OFUDECL (SIMPLETYPE t,s) (SIMPLETYPE t')) : p) ofu = if ofu == s then t else typeOrigin p ofu
+typeOrigin (DECSTMT (OFUDECL (SIMPLETYPE t,s) (SIMPLETYPE t')) : p) ofu = if ofu == s 
+                                                                          then t 
+                                                                          else typeOrigin p ofu
 typeOrigin (stmt:p) ofu = typeOrigin p ofu
-typeOrigin [] ofu = "BUG!!!"
+typeOrigin [] ofu = error "cannot search the empty program for origin functions"
 
 -- these helper functions feature in all translations
 helpers :: Program -> [String]
-helpers = const ["-- helper functions (used in all translations)",
-                 "distribution :: Ord a => [a] -> [(a,Int)]",
-                 "distribution = foldr ins []",
-                 "",
-                 "ins :: Ord a => a -> [(a,Int)] -> [(a, Int)]",
-                 "ins a [] = (a,1):[]",
-                 "ins a ((b,n):xs) = if a == b then (b,n+1):xs ",
-                 "                   else if a > b ",
-                 "                        then ((b,n) : ins a xs)",
-                 "                        else (a,1) : (b,n) : xs",
-                 "",
-                 "pretty :: Show a => Int -> (a,Int) -> String",
-                 "pretty n (x,y) = \"        \" ++ show x ++ \"   \" ++ show (fromIntegral y / fromIntegral n)",
-                 "",
-                 "uniformChoice :: [a] -> Prob a",
-                 "uniformChoice xs = do",
-                 "    choice <- uniformdiscrete (length xs)",
-                 "    return (xs !! choice)",
-                 "",
-                 "rejectionSampler :: Int -> [Maybe a] -> ([a],Int)",
-                 "rejectionSampler 0 _ = ([],0)",
-                 "rejectionSampler n (Nothing:xs) = let (xs',r) = rejectionSampler  n    xs in (xs',r+1)",
-                 "rejectionSampler n (Just x :xs) = let (xs',r) = rejectionSampler (n-1) xs in (x:xs',r)"]
+helpers = const 
+    ["-- helper functions (used in all translations)",
+     "distribution :: Ord a => [a] -> [(a,Int)]",
+     "distribution = foldr ins []",
+     "",
+     "ins :: Ord a => a -> [(a,Int)] -> [(a, Int)]",
+     "ins a [] = (a,1):[]",
+     "ins a ((b,n):xs) = if a == b then (b,n+1):xs ",
+     "                   else if a > b ",
+     "                        then ((b,n) : ins a xs)",
+     "                        else (a,1) : (b,n) : xs",
+     "",
+     "pretty :: Show a => Int -> (a,Int) -> String",
+     "pretty n (x,y) = \"        \" ++ show x ++ \"   \" ++ show (fromIntegral y / fromIntegral n)",
+     "",
+     "uniformChoice :: [a] -> Prob a",
+     "uniformChoice xs = do",
+     "    choice <- uniformdiscrete (length xs)",
+     "    return (xs !! choice)",
+     "",
+     "rejectionSampler :: Int -> [Maybe a] -> ([a],Int)",
+     "rejectionSampler 0 _ = ([],0)",
+     "rejectionSampler n (Nothing:xs) = let (xs',r) = rejectionSampler  n    xs in (xs',r+1)",
+     "rejectionSampler n (Just x :xs) = let (xs',r) = rejectionSampler (n-1) xs in (x:xs',r)"]
 
 -- the statistical model of the BLOG program, in LazyPPL's Prob monad
 model :: Program -> [String]
@@ -102,38 +108,47 @@ model p = ["-- model from source BLOG file",
            [""] ++
            returnStmt p)
 
--- does not explicitly type, nor leave comments (perhaps it should)
+-- the declarations and observations of the source BLOG program
 modelBody :: Program -> [String]
 modelBody p = modelBody' p p 
 
 -- keeps a copy of the whole program for reference (first arg)
 -- translation is ad-hoc (pattern matching non-exhaustive)
 modelBody' :: Program -> Program -> [String]
--- queries are not considered part of the model body, and are placed at the end (see returnStmt)
+
+-- query statements (not part of the model body, handled by returnStmt)
 modelBody' p (QRYSTMT e : p') = modelBody' p p'
 
 -- observation statements
-modelBody' p (EVDSTMT (e1,e2) : p') = ("let obs"++(show $ obsNum p (EVDSTMT (e1,e2)))++" = " ++ (transExpr p (context p) e1) ++ " == " ++ (transExpr p (context p) e2)) : modelBody' p p' 
+modelBody' p (EVDSTMT (e1,e2) : p') = ("let "++obsString++" = " ++ lhs ++ " == " ++ rhs) : modelBody' p p' 
+  where obsString = "obs" ++ (show $ obsNum p (EVDSTMT (e1,e2)))
+        lhs = transExpr p (context p) e1
+        rhs = transExpr p (context p) e2
 
--- nullary random functions (which can be sampled right away)
+-- nullary random functions (random variables)
 modelBody' p (DECSTMT (RFUDECL _ s [] e):p') = if isRand e
-                                               then ("v"++s++" <- "++(e'))  : modelBody' p p'
+                                               then ("v"++s++" <- "++e')    : modelBody' p p'
                                                else ("let v"++s++" = "++e') : modelBody' p p'
                                            where e' = transExpr p (context p) e
 
 -- random functions on arguments (which can be sampled right away using memoization)
-modelBody' p (DECSTMT (RFUDECL t s args e) : p') = (("f"++s++" <- generalmemoize (\\"++(unwords $ Prelude.map snd args)++" -> "++(transExpr p c' e))++")"):modelBody' p p'
+modelBody' p (DECSTMT (RFUDECL t s args e) : p') = ("f"++s++" <- "++lambdaFunc) : modelBody' p p'
   where c' = Prelude.foldr addToContext (context p) args
         addToContext (t,s) c = insert s ([],t) c
+        lambdaArgs = unwords $ Prelude.map (("v"++).snd) args
+        lambdaBody = (transExpr p c' e)
+        lambdaFunc = "generalmemoize (\\"++lambdaArgs++" -> "++lambdaBody++")"
 
--- nullary fixed functions
-modelBody' p (DECSTMT (FFUDECL t s [] e) : p') = ("let f"++s++" = " ++ (transExpr p (context p) e)) : modelBody' p p'
+-- nullary fixed functions (fixed variables)
+modelBody' p (DECSTMT (FFUDECL t s [] e) : p') = ("let v"++s++" = " ++ body) : modelBody' p p'
+  where body = transExpr p (context p) e
 
 -- fixed functions on arguments
-modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++" "++(unwords (Prelude.map (("v"++).snd) args)) ++ " = " ++ (transExpr p c' e)) : modelBody' p p'
-  where c' = Prelude.foldr addToContext (context p) args
-        addToContext (t,s) c = insert s ([],t) c
-  
+modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++" "++strArgs++" = " ++ body) : modelBody' p p'
+  where addToContext (t,s) c = insert s ([],t) c
+        c' = Prelude.foldr addToContext (context p) args
+        body = transExpr p c' e
+        strArgs = unwords $ Prelude.map (("v"++).snd) args
 
 -- other lines are not considered part of the model body and are passed over
 modelBody' p (stmt:p') = modelBody' p p'
@@ -149,6 +164,7 @@ isRand (BOOL n)   = False
 isRand BLOGParse.NULL = False
 isRand (BLOGParse.ID s) = False
 isRand (CALL "UnivarGaussian" _) = True
+isRand (CALL "Gaussian" _) = True
 isRand (CALL "UniformInt" _) = True
 isRand (CALL "BooleanDistrib" _) = True
 isRand (CALL "UniformReal" _) = True
@@ -199,21 +215,27 @@ userTypeInit p t = ("---- "++t++" population") :
 
 -- helper function of userTypeInit
 distinctStmts :: Program -> String -> [(String,Int)]
-distinctStmts (DECSTMT (DNTDECL s' [(member,count)]):p) s = if s' == s 
-                                                            then (member,count) : distinctStmts p s
-                                                            else distinctStmts p s
+
+distinctStmts (DECSTMT (DNTDECL s' ((member,count):[])):p) s = if s' == s 
+                                                               then (member,count) : distinctStmts p s
+                                                               else distinctStmts p s
+
 distinctStmts (DECSTMT (DNTDECL s' ((member,count):ms)):p) s = if s' == s 
-                                                               then (member,count) : distinctStmts (DECSTMT (DNTDECL s' ms):p) s
-                                                               else distinctStmts (DECSTMT (DNTDECL s' ms):p) s
+                                                               then (member,count) : distinctStmts shrunkStmt s
+                                                               else distinctStmts p s
+  where shrunkStmt = (DECSTMT (DNTDECL s' ms):p)
+
 distinctStmts (stmt:p) s = distinctStmts p s
 distinctStmts []       s = []
 
 dntStmtTrans :: Program -> String -> (String,Int) -> [String]
-dntStmtTrans p t (obj,count) = ["-- distinct "++t++" "++obj++if count == -1 then "" else "["++(show count)++"]",
-                                "let v"++obj++" = "++if count == -1 
-                                                 then t++nothings++" "++(show identity)
-                                                 else "["++t++nothings++" ("++(show identity)++s++(show $ count-1)++"]]"]
+dntStmtTrans p t (obj,count) = ["-- distinct "++t++" "++obj++optionalIndex,
+                                "let v"++obj++" = "++
+                                  if count == -1 
+                                  then t++nothings++" "++(show identity)
+                                  else "["++t++nothings++" ("++(show identity)++s++(show $ count-1)++"]]"]
   where nothings = (concat [" Nothing" | ofu <- ofus p t])
+        optionalIndex = if count == -1 then "" else "["++(show count)++"]"
         identity = offset p t obj
         s = " + i) | i <- [0.."
 
@@ -221,16 +243,21 @@ dntStmtTrans p t (obj,count) = ["-- distinct "++t++" "++obj++if count == -1 then
 -- determines the identity of a distinct member of a user-defined type
 offset :: Program -> String -> String -> Int
 offset [] t obj = 0
-offset (DECSTMT (DNTDECL t' [(obj',n)]):p) t obj = if t == t'
-                                                   then if obj' == obj 
-                                                        then 0
-                                                        else abs n + offset p t obj
-                                                   else offset p t obj
-offset (DECSTMT (DNTDECL t' ((obj',n):objs)):p) t obj = if t == t'
-                                                        then if obj' == obj 
-                                                             then 0
-                                                             else abs n + offset (DECSTMT (DNTDECL t' objs):p) t obj
-                                                        else offset p t obj
+
+offset (DECSTMT (DNTDECL t' [(obj',n)]):p) t obj = 
+    if t == t'
+    then if obj' == obj 
+         then 0
+         else abs n + offset p t obj
+    else offset p t obj
+
+offset (DECSTMT (DNTDECL t' ((obj',n):objs)):p) t obj = 
+    if t == t'
+    then if obj' == obj 
+         then 0
+         else abs n + offset (DECSTMT (DNTDECL t' objs):p) t obj
+    else offset p t obj
+
 offset (stmt:p) t obj = offset p t obj
 
 -- find the distinct members of a type
@@ -264,12 +291,20 @@ universeDecl p t = ["-- universe of all "++t++" members",
 
 memberStrings :: Program -> String -> [String]
 memberStrings [] t = []
-memberStrings (DECSTMT (NUMDECL t'   os e):p) t = if t' == t then ("lst"++name) : memberStrings p t else memberStrings p t
+
+memberStrings (DECSTMT (NUMDECL t'   os e):p) t = if t' == t 
+                                                  then ("lst"++name) : memberStrings p t 
+                                                  else memberStrings p t
   where name = numStmtName $ DECSTMT (NUMDECL t' os e)
-memberStrings (DECSTMT (DNTDECL t' [m]):p) t = if t' == t then (memberString m) : memberStrings p t else memberStrings p t
+
+memberStrings (DECSTMT (DNTDECL t' [m]):p) t = if t' == t 
+                                               then (memberString m) : memberStrings p t 
+                                               else memberStrings p t
+
 memberStrings (DECSTMT (DNTDECL t' (m:ms)):p) t = if t' == t 
                                                   then (memberString m) : memberStrings (DECSTMT (DNTDECL t' ms):p) t
                                                   else memberStrings p t
+
 memberStrings (stmt:p) t = memberStrings p t
 
 -- helper function of memberStrings
@@ -285,21 +320,27 @@ numStmtName (DECSTMT (NUMDECL s' os e)) = s' ++ concat (Prelude.map fst os)
 -- writes a line of Haskell to calculate the RHS of a number statement
 -- assumes identifier "i" is not already bound
 numStmtCalc :: Program -> Statement -> String
-numStmtCalc p (DECSTMT (NUMDECL s' [] e)) = "len"++numStmtName (DECSTMT (NUMDECL s' [] e))++" <- "++(transExpr p (context p) e)
-numStmtCalc p (DECSTMT (NUMDECL s' os e)) = "len"++numStmtName (DECSTMT (NUMDECL s' os e))++" <- sequence [do {i <- "++rhs++";return (i"++vars++")} | "++originLoop++"]"
-  where rhs = (transExpr p (context p) e)
-        originLoop = intercalate ", " $ Prelude.map (\(ofu,arg) -> arg ++ " <- universe" ++ (typeOrigin p ofu)) os
+numStmtCalc p (DECSTMT (NUMDECL s' [] e)) = "len"++name++" <- "++(transExpr p (context p) e)
+  where name = numStmtName (DECSTMT (NUMDECL s' [] e))
+numStmtCalc p (DECSTMT (NUMDECL s' os e)) = "len"++name++" <- sequence [do {i <- "++rhs++suffix
+  where name = numStmtName (DECSTMT (NUMDECL s' os e))
+        rhs = (transExpr p (context p) e)
+        stringifyOrigins = Prelude.map (\(ofu,arg) -> arg ++ " <- universe" ++ (typeOrigin p ofu))
+        originLoop = intercalate ", " $ stringifyOrigins os
         vars = concat ["," ++ (originVar os (fst o)) | o <- os]
+        suffix = ";return (i"++vars++")} | "++originLoop++"]"
 
 numStmtGround :: Program -> Statement -> String
 numStmtGround p (DECSTMT (NUMDECL s' [] e)) = "let lst"++name++" = ["++s'++sources++lastBit++name++" - 1]]"
   where name    = numStmtName (DECSTMT (NUMDECL s' [] e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' [] e))
         lastBit = " ("++(show $ offset p s' "")++" + i) | i <- [0..fromIntegral len"
-numStmtGround p (DECSTMT (NUMDECL s' os e)) = "let lst"++name++" = concat [["++s'++sources++" (fromIntegral i) | i <- [0..n-1]] | (n"++vars++") <- len"++name++"]"
+numStmtGround p (DECSTMT (NUMDECL s' os e)) = line
   where name    = numStmtName (DECSTMT (NUMDECL s' os e))
         sources = numStmtSources p (DECSTMT (NUMDECL s' os e))
         vars    = concat ["," ++ (originVar os ofu) | (ofu,arg) <- os]
+        str     = " (fromIntegral i) | i <- [0..n-1]] | (n"
+        line    = "let lst"++name++" = concat [["++s'++sources++str++vars++") <- len"++name++"]"
 
 numStmtSources :: Program -> Statement -> String
 numStmtSources p (DECSTMT (NUMDECL s' os e)) = concat [if os `contains` ofu 
@@ -330,7 +371,7 @@ transExpr p c (BLOGParse.PLUS  e1 e2) = op p c "+" e1 e2
 transExpr p c (BLOGParse.MINUS e1 e2) = op p c "-" e1 e2
 transExpr p c (BLOGParse.MULT  e1 e2) = op p c "*" e1 e2
 transExpr p c (BLOGParse.DIV   e1 e2) = op p c "/" e1 e2
-transExpr p c (BLOGParse.MOD   e1 e2) = op p c "`mod`" e1 e2 -- will cause type issues; FIX!
+transExpr p c (BLOGParse.MOD   e1 e2) = op p c "`mod`" e1 e2 -- may cause subtle type issues in some cases
 transExpr p c (BLOGParse.POWER e1 e2) = if typeIt e1 c == ([],SIMPLETYPE "Integer")
                                         then op p c "^" e1 e2
                                         else op p c "**" e1 e2
@@ -342,25 +383,28 @@ transExpr p c (BLOGParse.EQEQ  e1 e2) = op p c "==" e1 e2
 transExpr p c (BLOGParse.NEQ   e1 e2) = op p c "/=" e1 e2
 transExpr p c (BLOGParse.AND   e1 e2) = op p c "&&" e1 e2
 transExpr p c (BLOGParse.OR    e1 e2) = op p c "||" e1 e2
-transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- this is an anti-pun. (<=) :: Ord is "implies"
+transExpr p c (BLOGParse.IMPLIES e1 e2) = op p c "<=" e1 e2 -- this is an anti-pun. (<=) is "implies" on Bool
 transExpr p c (APPLY (CALL s []) (INT n)) = "(v"++s++" !! "++show n++")"
 transExpr p c (BLOGParse.NEG e) = "(-" ++ transExpr p c e ++ ")"
 transExpr p c (BLOGParse.NOT e) = "(not " ++ transExpr p c e ++ ")"
-transExpr p c (BLOGParse.AT e) = error "AT may be out-of-scope for this translator (timesteps not implemented)"
+transExpr p c (BLOGParse.AT e) = error "AT is out-of-scope for this translator (timesteps not implemented)"
 transExpr p c (IFELSE e1 e2 e3) = "if "++transExpr p c e1++" then "++transExpr p c e2++" else "++transExpr p c e3
-transExpr p c (IFTHEN _ _) = error "IFTHEN not implemented"
+transExpr p c (IFTHEN _ _) = error "IFTHEN not implemented (null values are out-of-scope for this translator)"
 transExpr p c (CALL s args) = transCall p c (CALL s args)
-transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented" -- could be implemented as a function?
+transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented"
 transExpr p c (BLOGParse.CASE e1 (MAPCONSTRUCT ess)) = "case " ++ transExpr p c e1 ++ " of {" ++ mapify ess ++ "}"
   where mapify = (intercalate "; ". (Prelude.map (\(e1,e2) -> (transExpr p c e1) ++ " -> " ++ (transExpr p c e2))))
-transExpr p c (COMPREHENSION [e'] args e) = "["++(transExpr p (argContext args `union` c) e')++" | "++(intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args)++"]"
+transExpr p c (COMPREHENSION [e'] args e) = "["++body++" | "++sources++"]"
+  where body    = (transExpr p (argContext args `union` c) e')
+        sources = intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args
 transExpr p c (BLOGParse.LIST es) = "[" ++ intercalate ", " (Prelude.map (transExpr p c) es) ++ "]"
-transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "(any id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
-transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "(all id [" ++ transExpr p (insert s ([],SIMPLETYPE t) c) e ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
+transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "(any id [" ++ e' ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
+  where e' = transExpr p (insert s ([],SIMPLETYPE t) c) e
+transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "(all id [" ++ e' ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
+  where e' = transExpr p (insert s ([],SIMPLETYPE t) c) e
 transExpr p c e = error $ "I don't know how to translate " ++ show e
-  
 
--- helper function of transExpr (creates type context for args)
+-- helper function of transExpr (creates type context of arguments)
 argContext :: [(Type,String)] -> Map String ([Type],Type)
 argContext = fromList . (Prelude.map (\(t,s) -> (s,([],t))))
 
@@ -382,7 +426,8 @@ transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices are out-of-sco
 transCall p c (CALL "Poisson" [e]) = "(poisson " ++ transExpr p c e ++ ")"
 transCall p c (CALL "BooleanDistrib" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
 transCall p c (CALL "Bernoulli" [e]) = "(categorical [" ++ transExpr p c e ++ ",1])"
-transCall p c (CALL "Geometric" [e]) = "let geometric = do {i <- LazyPPL.uniform;if i < "++transExpr p c e++" then 0 else 1 + geometric} in geometric"
+transCall p c (CALL "Geometric" [e]) = "let geometric = do {i <- LazyPPL.uniform;if i < "++transExpr p c e++suffix
+  where suffix = " then 0 else 1 + geometric} in geometric"
 transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "++probs++";return $ "++vals++" !! i}"
   where probs = "[" ++ (intercalate ", " $ Prelude.map (normalise.transExpr p c.snd) ess) ++ "]"
         vals  = "[" ++ (intercalate ", " $ Prelude.map (transExpr p c.fst) ess) ++ "]"
@@ -433,7 +478,9 @@ numberStmts (x:p) s = numberStmts p s
 
 -- counts the inhabitants of a user-defined type
 countType :: Program -> String -> Int
-countType (DECSTMT (DNTDECL s' ls) : p) s = (countType p s) + if s' == s then (sum $ (Prelude.map (abs.snd) ls)) else 0
+countType (DECSTMT (DNTDECL s' ls) : p) s = (countType p s) + if s' == s 
+                                                              then sum $ Prelude.map (abs.snd) ls
+                                                              else 0
 countType [] s = 0
 countType (x:p) s = countType p s
 
@@ -443,16 +490,13 @@ tuplefy [t] = t
 tuplefy xs  = "(" ++ (intercalate "," xs) ++ ")"
 
 -- maps identifiers to their types
--- (BLOG models constants as 0-ary functions)
+-- (note BLOG models constants as 0-ary functions)
 context :: Program -> Map String ([Type],Type)
-context [] = fromList [("size",([SIMPLETYPE "a set of some sort"],SIMPLETYPE "Int"))] -- UNFINISHED
+context [] = fromList []
 context ((DECSTMT (FFUDECL t s args e)) : p) = insert s (Prelude.map fst args,t) (context p)
 context ((DECSTMT (RFUDECL t s args e)) : p) = insert s (Prelude.map fst args,t) (context p)
 context ((DECSTMT (DNTDECL s members)) : p) = (mapify s members) `union` (context p)
 context ((DECSTMT (OFUDECL (SIMPLETYPE t, s) (SIMPLETYPE t'))) : p) = insert s ([SIMPLETYPE t'],SIMPLETYPE t) (context p)
-context ((DECSTMT (DNTDECL t [])) : p) = context p
-context ((DECSTMT (DNTDECL t ((s,-1):mems))) : p) = insert s ([],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
-context ((DECSTMT (DNTDECL t ((s,n):mems)))  : p) = insert s ([SIMPLETYPE "Integer"],SIMPLETYPE t) (context ((DECSTMT (DNTDECL t mems)) : p))
 context (stmt : p) = context p
 
 -- helper function of context
@@ -511,16 +555,16 @@ typeIt (APPLY (CALL s []) (INT n)) c  = let l = Data.Map.lookup s c in
                                           then error $ "no user-declared value "++s
                                           else let Just (_,t) = l in ([],t)
 typeIt (NEG e1) m       = typeIt e1 m
-typeIt (BLOGParse.NOT e1) _      = ([],SIMPLETYPE "Boolean")
-typeIt (BLOGParse.AT e1) _       = error "Timesteps are out-of-scope for this translator"
-typeIt (IFELSE e1 e2 e3) c = if ((typeIt e2 c) == (typeIt e3 c)) then typeIt e2 c else error "IfElse type error"
+typeIt (BLOGParse.NOT e1) _ = ([],SIMPLETYPE "Boolean")
+typeIt (BLOGParse.AT e1) _  = error "Timesteps are out-of-scope for this translator"
+typeIt (IFELSE e1 e2 e3) c = typeIt e2 c
 typeIt (IFTHEN e1 e2) _  = error "IFTHEN not implemented"
 typeIt (CALL s es) c     = let l = Data.Map.lookup s c in 
                              if isNothing l
-                             then error $ s++" not found" 
+                             then error $ s++" not found in context" 
                              else let (Just (argTypes, returnType)) = l in ([],returnType)
-typeIt (MAPCONSTRUCT e1e2s) _   = error "Not sure how to do maps...?"
-typeIt (COMPREHENSION es tss e) _ = error "How to do comprehensions??"
+typeIt (MAPCONSTRUCT e1e2s) _   = error "Maps cannot be typed"
+typeIt (COMPREHENSION es tss e) _ = error "Comprehensions cannot be typed"
 typeIt (BLOGParse.EXISTS t s e) _ = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.FORALL t s e) _ = ([],SIMPLETYPE "Boolean")
 typeIt x _ = error $ "I dont know how to type" ++ show x
@@ -549,9 +593,11 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               ["putStrLn \"======== Done ========\""])
 
 results :: Program -> [String]
-results p = concat [["putStrLn \"Distribution of samples for "++(escapeQuotes $ show (queries p !! (q-1)))++"\"",
-                     "mapM (putStrLn.pretty 10000) (distribution $ map " ++ pull q (length $ queries p) ++ " answers)"] 
+results p = concat [[msg++(escapeQuotes $ show (queries p !! (q-1)))++"\"",
+                     prettyPrint ++ " (distribution $ map " ++ pull q (length $ queries p) ++ " answers)"] 
                     | q <- [1..length $ queries p]]
+  where prettyPrint = "mapM (putStrLn.pretty 10000)"
+        msg = "putStrLn \"Distribution of samples for "
 
 escapeQuotes :: String -> String
 escapeQuotes [] = []
