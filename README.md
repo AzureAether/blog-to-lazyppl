@@ -16,6 +16,7 @@ The BLOGLex, BLOGParse and BLOGTranslate modules all expose a main method which 
 
 Note that several grammatical features of BLOG are currently untranslated:
 - IF-THEN statements (as opposed to IF-THEN-ELSE statements)
+- pattern-matching obs statements
 - matrices, vectors, and distributions which support them
 - time steps, and language features which support them
 - constants (EG pi)
