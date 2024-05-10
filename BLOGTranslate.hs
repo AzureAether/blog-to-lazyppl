@@ -577,10 +577,10 @@ typeIt x _ = error $ "I dont know how to type" ++ show x
 mainPart :: Program -> [String]
 mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "putStrLn \"Using a fixed random seed for repeatability.\"",
+              "putStrLn \"............................................\"",
               "putStrLn \"Constructing inference engine of type IO ()\"",
               "putStrLn \"Constructing sampler of type Int -> [Maybe a] -> ([a],Int)\"",
-              "putStrLn \"..............................................\"",
-              "putStrLn \"Evidence: "++(escapeQuotes $ (intercalate ", " $ Prelude.map showObs $ observations p))++"\"",
+              "putStrLn \"Evidence: ["++(escapeQuotes $ (intercalate ", " $ Prelude.map showObs $ observations p))++"]\"",
               "putStrLn \"Query: " ++ (escapeQuotes (show $ queries p)) ++ "\"",
               "putStrLn \"Running for 10000 samples...\"\n",
               "putStrLn \"Query reporting interval is 1000\"",
@@ -599,12 +599,12 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "-- loop to yield data points",
               "let (answers,rejections) = (rejectionSampler 10000) $ runProb (sequence (repeat model)) tree\n",
               "let consistentWorlds = 10000 / (fromIntegral (10000 + rejections))",
-              "putStrLn \"======  LW Trial Stats  ======\"",
+              "putStrLn \"========  LW Trial Stats  =========\"",
               "putStrLn $ \"Log of average likelihood weight (this trial): \" ++ \"???\"",
               "putStrLn $ \"Average likelihood weight (this trial): \"        ++ \"???\"",
               "putStrLn $ \"Fraction of consistent worlds (this trial): \"    ++ \"???\"",
               "putStrLn $ \"Fraction of consistent worlds (running avg, all trials): \" ++ \"???\"",
-              "putStrLn \"======== Query Results ========\"",
+              "putStrLn \"======== Query Results =========\"",
               "putStrLn \"Number of samples: 10000\""] ++
               results p ++
               ["putStrLn \"======== Done ========\""])
@@ -615,7 +615,7 @@ results p = concat [[msg++(escapeQuotes $ show (queries p !! (q-1)))++"\"",
                      prettyPrint ++ " (distribution $ map " ++ pull q (length $ queries p) ++ " answers)"] 
                     | q <- [1..length $ queries p]]
   where prettyPrint = "mapM (putStrLn.pretty 10000)"
-        msg = "putStrLn \"Distribution of samples for "
+        msg = "putStrLn \"Distribution of values for "
 
 escapeQuotes :: String -> String
 escapeQuotes [] = []
