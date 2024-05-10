@@ -115,7 +115,7 @@ modelBody p = modelBody' p p
 -- keeps a copy of the whole program for reference (first arg)
 modelBody' :: Program -> Program -> [String]
 
--- observation statements
+-- evidence statements
 modelBody' p (EVDSTMT (e1,e2) : p') = ("let "++obsString++" = " ++ lhs ++ " == " ++ rhs) : modelBody' p p' 
   where obsString = "obs" ++ (show $ obsNum p (EVDSTMT (e1,e2)))
         lhs = transExpr p (context p) e1
