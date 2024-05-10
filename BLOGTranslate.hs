@@ -54,7 +54,7 @@ types ((DECSTMT (TYPDECL x)) : xs) = x : types xs
 types (x:xs) = types xs
 types [] = []
 
--- list of all origin *functions* (and their types) of a type (could be fused with origins?)
+-- list of all origin *functions* (and their types) of a type
 ofus :: Program -> String -> [(Type,String)]
 ofus ((DECSTMT (OFUDECL (SIMPLETYPE t,s') (SIMPLETYPE t'))):p) s = if s == t' 
                                                                       then (SIMPLETYPE t,s'):ofus p s 
@@ -113,11 +113,7 @@ modelBody :: Program -> [String]
 modelBody p = modelBody' p p 
 
 -- keeps a copy of the whole program for reference (first arg)
--- translation is ad-hoc (pattern matching non-exhaustive)
 modelBody' :: Program -> Program -> [String]
-
--- query statements (not part of the model body, handled by returnStmt)
-modelBody' p (QRYSTMT e : p') = modelBody' p p'
 
 -- observation statements
 modelBody' p (EVDSTMT (e1,e2) : p') = ("let "++obsString++" = " ++ lhs ++ " == " ++ rhs) : modelBody' p p' 
@@ -512,7 +508,7 @@ queries (x:xs) = queries xs
 queries [] = []
 
 -- the types of those queried expressions (in source file order)
--- (DANGEROUS: ASSUMES THEY ARE 0-ary EXPRESSIONS)
+-- (assumes these expressions take no arguments)
 queryTypes :: Program -> [String]
 queryTypes p = Prelude.map (typeString.(\e -> snd $ typeIt e (context p))) (queries p)
 
@@ -569,7 +565,7 @@ typeIt (BLOGParse.EXISTS t s e) _ = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.FORALL t s e) _ = ([],SIMPLETYPE "Boolean")
 typeIt x _ = error $ "I dont know how to type" ++ show x
 
--- main method (not quite finished)
+-- main method
 mainPart :: Program -> [String]
 mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "putStrLn \"Using a fixed random seed for repeatability.\"",
