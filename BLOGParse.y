@@ -108,7 +108,7 @@ type :
     | array_type { (ARRAYTYPE $1) }
     | map_type   { (MAPTYPE $1) }
 
-type_type : type { $1 }  {- added deviously by me -}
+type_type : type { $1 }  {- added to repair the grammar -}
 
 list_type :
     LIST LT refer_name GT { $3 }
@@ -141,7 +141,7 @@ type_var_lst :
     | type ID                           { [($1, $2)] }
     | type ID extra_commas type_var_lst { ($1,$2) : $4 }
     | type ID type_var_lst              { ($1,$2) : $3 }
-    | type COMMA type_var_lst           { ($1,"") : $3 }    {- what??? -}
+    | type COMMA type_var_lst           { ($1,"") : $3 } 
 
 fixed_func_decl :
     FIXED type_type ID opt_parenthesized_type_var_lst EQ expression  { FFUDECL $2 $3 $4 $6 }
@@ -151,7 +151,7 @@ rand_func_decl :
 
 number_stmt :
     NUMSIGN refer_name opt_parenthesized_origin_var_list dependency_statement_body { NUMDECL $2 $3 $4 }
-    | NUMSIGN opt_parenthesized_origin_var_list dependency_statement_body          { NUMDECL "" $2 $3 }    {- eh??? -}
+    | NUMSIGN opt_parenthesized_origin_var_list dependency_statement_body          { NUMDECL "" $2 $3 }  
 
 opt_parenthesized_origin_var_list :
     {- empty -}                     { [] }
@@ -160,7 +160,7 @@ opt_parenthesized_origin_var_list :
 origin_var_list :
     ID EQ ID COMMA origin_var_list          { ($1,$3) : $5 }
     | ID EQ ID extra_commas origin_var_list { ($1,$3) : $5 }
-    | ID EQ COMMA origin_var_list           { ($1,"") : $4 }   {- huh??? -}
+    | ID EQ COMMA origin_var_list           { ($1,"") : $4 }  
     | ID EQ ID origin_var_list              { ($1,$3) : $4 }
     | ID EQ ID                              { [($1,$3)] }
     | ID ID                                 { [($1,$2)] }
@@ -196,7 +196,7 @@ dependency_statement_body :
 
 parameter_decl :
     PARAM type ID                     { PRMDECL $2 $3 }
-    | PARAM type ID COLON expression  { PRMDECL $2 $3 }   {- NOT DONE! This is weird!! -}
+    | PARAM type ID COLON expression  { PRMDECL $2 $3 }
 
 expression :
     operation_expr             { $1 }
@@ -302,7 +302,7 @@ comprehension_expr :
     expression_list FOR type_var_lst opt_colon_expr   { COMPREHENSION $1 $3 $4 }
 
 opt_colon_expr :
-    {- empty -}          { BOOL True }   {- non trivial choice!!! -}
+    {- empty -}          { BOOL True }   {- an empty guard of a comprehension is always true -}
     | COLON expression   { $2 }
 
 tuple_set :

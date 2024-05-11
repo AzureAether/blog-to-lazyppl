@@ -151,7 +151,7 @@ modelBody' p (DECSTMT (FFUDECL t s args e) : p') = ("let f"++s++" "++strArgs++" 
 modelBody' p (stmt:p') = modelBody' p p'
 modelBody' p [] = []
 
--- detects whether an expression requires random sampling to evaluate
+-- detects whether an expression is random w.r.t its free variables
 -- (IE whether it should be translated as a Prob or not)
 isRand :: Expr -> Bool
 isRand (INT n)    = False
@@ -164,8 +164,17 @@ isRand (CALL "UnivarGaussian" _) = True
 isRand (CALL "Gaussian" _) = True
 isRand (CALL "UniformInt" _) = True
 isRand (CALL "BooleanDistrib" _) = True
+isRand (CALL "Bernoulli" _) = True
+isRand (CALL "Geometric" _) = True
 isRand (CALL "UniformReal" _) = True
+isRand (CALL "UniformChoice" _) = True
 isRand (CALL "Categorical" _) = True
+isRand (CALL "Beta" _) = True
+isRand (CALL "Exponential" _) = True
+isRand (CALL "Binomial" _) = True
+isRand (CALL "Laplace" _) = True
+isRand (CALL "Gamma" _) = True
+isRand (CALL "Poisson" _) = True
 isRand (CALL "abs" _) = False
 isRand (CALL "exp" _) = False
 isRand (CALL "sin" _) = False
@@ -393,11 +402,11 @@ transExpr p c (BLOGParse.CASE e1 (MAPCONSTRUCT ess)) = "case " ++ transExpr p c 
   where mapify = (intercalate "; ". (Prelude.map (\(e1,e2) -> (transExpr p c e1) ++ " -> " ++ (transExpr p c e2))))
 transExpr p c (COMPREHENSION [e'] args e) = "["++body++" | "++sources++"]"
   where body    = (transExpr p (argContext args `union` c) e')
-        sources = intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> s++" <- universe"++t) args
+        sources = intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> "v"++s++" <- universe"++t) args
 transExpr p c (BLOGParse.LIST es) = "[" ++ intercalate ", " (Prelude.map (transExpr p c) es) ++ "]"
-transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "(any id [" ++ e' ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
+transExpr p c (BLOGParse.EXISTS (SIMPLETYPE t) s e) = "(any id [" ++ e' ++ " | v" ++ s ++ " <- universe" ++ t ++ "])"
   where e' = transExpr p (insert s ([],SIMPLETYPE t) c) e
-transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "(all id [" ++ e' ++ " | " ++ s ++ " <- universe" ++ t ++ "])"
+transExpr p c (BLOGParse.FORALL (SIMPLETYPE t) s e) = "(all id [" ++ e' ++ " | v" ++ s ++ " <- universe" ++ t ++ "])"
   where e' = transExpr p (insert s ([],SIMPLETYPE t) c) e
 transExpr p c e = error $ "I don't know how to translate " ++ show e
 
@@ -433,7 +442,7 @@ transCall p c (CALL "Categorical" [MAPCONSTRUCT ess]) = "do {i <- categorical "+
 transCall p c (CALL "Beta" _) = error "Beta distribution not implemented"
 transCall p c (CALL "Binomial" _) = error "Binomial distribution not implemented"
 transCall p c (CALL "Exponential" _) = error "Exponential distribution not implemented"
-transCall p c (CALL "Gamma" _) = error "Gamma distribution not implemented"
+transCall p c (CALL "Gamma" [e1,e2]) = "(gamma "++transExpr p c e1++" "++transExpr p c e2++")"
 transCall p c (CALL "Gaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
 transCall p c (CALL "UnivarGaussian" [e1,e2]) = "(normal "++transExpr p c e1++" "++transExpr p c e2++")"
 transCall p c (CALL "Laplace" _) = error "Laplace distribution not implemented"
@@ -578,7 +587,7 @@ mainPart :: Program -> [String]
 mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "putStrLn \"Using a fixed random seed for repeatability.\"",
               "putStrLn \"............................................\"",
-              "putStrLn \"Constructing inference engine of type IO ()\"",
+              "putStrLn \"Constructing inference engine\"",
               "putStrLn \"Constructing sampler of type Int -> [Maybe a] -> ([a],Int)\"",
               "putStrLn \"Evidence: ["++(escapeQuotes $ (intercalate ", " $ Prelude.map showObs $ observations p))++"]\"",
               "putStrLn \"Query: " ++ (escapeQuotes (show $ queries p)) ++ "\"",
@@ -599,11 +608,8 @@ mainPart p = ["main :: IO ()","main = do"] ++ Prelude.map ("    "++) ([
               "-- loop to yield data points",
               "let (answers,rejections) = (rejectionSampler 10000) $ runProb (sequence (repeat model)) tree\n",
               "let consistentWorlds = 10000 / (fromIntegral (10000 + rejections))",
-              "putStrLn \"========  LW Trial Stats  =========\"",
-              "putStrLn $ \"Log of average likelihood weight (this trial): \" ++ \"???\"",
-              "putStrLn $ \"Average likelihood weight (this trial): \"        ++ \"???\"",
-              "putStrLn $ \"Fraction of consistent worlds (this trial): \"    ++ \"???\"",
-              "putStrLn $ \"Fraction of consistent worlds (running avg, all trials): \" ++ \"???\"",
+              "putStrLn \"=== Rejection Sampler Trial Stats ===\"",
+              "putStrLn $ \"Fraction of worlds accepted (this trial): \" ++ show consistentWorlds",
               "putStrLn \"======== Query Results =========\"",
               "putStrLn \"Number of samples: 10000\""] ++
               results p ++
