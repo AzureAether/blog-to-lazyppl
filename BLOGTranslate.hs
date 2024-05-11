@@ -129,7 +129,10 @@ modelBody' p (DECSTMT (RFUDECL _ s [] e):p') =
   where e' = transExpr p (context p) e
 
 -- random functions on arguments (which can be sampled right away using memoization)
-modelBody' p (DECSTMT (RFUDECL t s args e) : p') = ("f"++s++" <- "++lambdaFunc) : modelBody' p p'
+modelBody' p (DECSTMT (RFUDECL t s args e) : p') = 
+    if isRand e
+    then ("f"++s++" <- "++lambdaFunc) : modelBody' p p'
+    else ("let f"++s++" "++lambdaArgs++" = "++lambdaBody) : modelBody' p p'
   where c' = Prelude.foldr addToContext (context p) args
         addToContext (t,s) c = insert s ([],t) c
         lambdaArgs = unwords $ Prelude.map (("v"++).snd) args
@@ -178,10 +181,12 @@ isRand (CALL "Poisson" _) = True
 isRand (CALL "abs" _) = False
 isRand (CALL "exp" _) = False
 isRand (CALL "sin" _) = False
+isRand (BLOGParse.DIV e1 e2) = False
 isRand (IFELSE e1 e2 e3) = isRand e2
 isRand (BLOGParse.CASE e1 (MAPCONSTRUCT ((e2,e3):ess))) = isRand e3
 isRand (CALL s []) = False -- assume this is a variable or user-defined constant
-isRand (CALL s es) = False -- assume this is a fixed user-defined function (NOT ALWAYS TRUE)
+isRand (CALL s es) = False -- assume this is a user-defined function
+isRand x = error $ "cannot check for randomness in " ++ show x
 
 -- helper function of modelBody'
 obsNum :: Program -> Statement -> Int
@@ -400,7 +405,7 @@ transExpr p c (CALL s args) = transCall p c (CALL s args)
 transExpr p c (MAPCONSTRUCT _) = error "MAPCONSTRUCT not implemented"
 transExpr p c (BLOGParse.CASE e1 (MAPCONSTRUCT ess)) = "case " ++ transExpr p c e1 ++ " of {" ++ mapify ess ++ "}"
   where mapify = (intercalate "; ". (Prelude.map (\(e1,e2) -> (transExpr p c e1) ++ " -> " ++ (transExpr p c e2))))
-transExpr p c (COMPREHENSION [e'] args e) = "["++body++" | "++sources++"]"
+transExpr p c (COMPREHENSION [e'] args e) = "["++body++" | "++sources++", "++transExpr p c e++"]"
   where body    = (transExpr p (argContext args `union` c) e')
         sources = intercalate ", " $ Prelude.map (\(SIMPLETYPE t,s) -> "v"++s++" <- universe"++t) args
 transExpr p c (BLOGParse.LIST es) = "[" ++ intercalate ", " (Prelude.map (transExpr p c) es) ++ "]"
@@ -425,11 +430,11 @@ transCall p c (CALL "UniformChoice" [e]) = "(uniformChoice "++transExpr p c e++"
 transCall p c (CALL "UniformReal" [e1,e2]) = "do {i <- LazyPPL.uniform; return $ "++e1'++" + i*("++e2'++" - "++e1'++")}"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
-transCall p c (CALL "UniformInt" [e1,e2]) = "do {i <- uniformdiscrete ("++e2'++" - "++e1'++"); return $ i + "++e1'++"}"
+transCall p c (CALL "UniformInt" [e1,e2]) = "(uniformChoice ["++e1'++".."++e2'++"])"
   where e1' = transExpr p c e1
         e2' = transExpr p c e2
 transCall p c (CALL "MultivarGaussian" [e1,e2]) = error "Matrices are out-of-scope for this translator"
-transCall p c (CALL "Poisson" [e]) = "(poisson " ++ transExpr p c e ++ ")"
+transCall p c (CALL "Poisson" [e]) = "(do {i <- poisson " ++ transExpr p c e ++ ";return $ fromIntegral i})"
 transCall p c (CALL "BooleanDistrib" [e]) = "(bernoulli " ++ transExpr p c e ++ ")"
 transCall p c (CALL "Bernoulli" [e]) = "(categorical [" ++ transExpr p c e ++ ",1])"
 transCall p c (CALL "Geometric" [e]) = "let geometric = do {i <- LazyPPL.uniform;if i < "++transExpr p c e++suffix
@@ -451,18 +456,13 @@ transCall p c (CALL "Discrete" _)         = error "Matrices are out-of-scope for
 transCall p c (CALL "Multinomial" _)      = error "Matrices are out-of-scope for this translator"
 transCall p c (CALL "NegativeBinomial" _) = error "Matrices are out-of-scope for this translator"
 transCall p c (CALL "UniformVector" _)    = error "Matrices are out-of-scope for this translator"
-transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
-                               Nothing -> "v"++s -- lambda-bound argument
-                               Just ([],SIMPLETYPE "Boolean") -> "v"++s
-                               Just ([],SIMPLETYPE "Real")    -> "v"++s
-                               Just ([],SIMPLETYPE userType)  -> "v"++s
-                               Just ([], t)   -> error $ "transCall error #1"
-                               Just (args, t) -> error $ "transCall error #2"
 transCall p c (CALL "size"  [e]) = "(length "++transExpr p c e++")"
 transCall p c (CALL "round" [e]) = "(round " ++transExpr p c e++")"
 transCall p c (CALL "sin"   [e]) = "(sin "   ++transExpr p c e++")"
 transCall p c (CALL "cos"   [e]) = "(cos "   ++transExpr p c e++")"
 transCall p c (CALL "tan"   [e]) = "(tan "   ++transExpr p c e++")"
+transCall p c (CALL "atan"  [e]) = "(atan "   ++transExpr p c e++")"
+transCall p c (CALL "atan2" [e1,e2]) = "(atan2 "++transExpr p c e1++" "++transExpr p c e2++")"
 transCall p c (CALL "abs"   [e]) = "(abs "   ++transExpr p c e++")"
 transCall p c (CALL "min"   [e]) = "(minimum "   ++transExpr p c e++")"
 transCall p c (CALL "max"   [e]) = "(maximum "   ++transExpr p c e++")"
@@ -473,6 +473,15 @@ transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
                                Just ((arg:args),t) -> "(f"++ s ++ " " ++ transExpr p c e ++ ")"
                                _ -> error $ "cannot call " ++ (show s) ++ " as a function"
+transCall p c (CALL "pi" []) = "pi"
+transCall p c (CALL s [])  = case (Data.Map.lookup s $ c) of
+                               Nothing -> "v"++s -- lambda-bound argument
+                               Just ([],SIMPLETYPE "Boolean") -> "v"++s
+                               Just ([],SIMPLETYPE "Real")    -> "v"++s
+                               Just ([],SIMPLETYPE userType)  -> "v"++s
+                               Just ([], t)   -> error $ "transCall error #1"
+                               Just (args, t) -> error $ "transCall error #2"
+
 transCall p c (CALL s es) = "(f"++s++" "++unwords (Prelude.map (transExpr p c) es)++")"
 
 -- retrieves the number statements of a user-defined type
@@ -563,6 +572,7 @@ typeIt (BLOGParse.NEQ e1 e2) _   = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.AND e1 e2) _   = ([],SIMPLETYPE "Boolean")
 typeIt (BLOGParse.OR e1 e2) _    = ([],SIMPLETYPE "Boolean")
 typeIt (IMPLIES e1 e2) _ = ([],SIMPLETYPE "Boolean")
+typeIt (CALL "size" _) _ = ([],SIMPLETYPE "Integer")
 typeIt (APPLY (CALL s []) (INT n)) c  = let l = Data.Map.lookup s c in
                                           if isNothing l 
                                           then error $ "no user-declared value "++s
