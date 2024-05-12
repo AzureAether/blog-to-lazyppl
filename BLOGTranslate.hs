@@ -467,7 +467,7 @@ transCall p c (CALL "abs"   [e]) = "(abs "   ++transExpr p c e++")"
 transCall p c (CALL "min"   [e]) = "(minimum "   ++transExpr p c e++")"
 transCall p c (CALL "max"   [e]) = "(maximum "   ++transExpr p c e++")"
 transCall p c (CALL "exp"   [e]) = "(exp "   ++if typeIt e c == ([],SIMPLETYPE "Integer") 
-                                               then "(fromIntegral "++transExpr p c e++")"
+                                               then "(fromIntegral "++transExpr p c e++"))"
                                                else (transExpr p c e)++")"
 transCall p c (CALL s [e]) = case (Data.Map.lookup s $ c) of
                                Nothing -> error $ "unable to find function " ++ s
